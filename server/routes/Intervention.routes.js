@@ -16,5 +16,8 @@ router.put('/:id', InterventionController.updateInterventionStatus);
 
 // DELETE → Delete intervention
 router.delete('/:id', InterventionController.deleteIntervention);
+router.put('/:id/resolve', InterventionController.resolveIntervention);
+// GET → Get completed interventions (history)
+router.get('/history/interventions', InterventionController.getCompletedInterventions);
 
 module.exports = router;

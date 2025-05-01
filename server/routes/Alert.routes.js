@@ -19,7 +19,15 @@ router.get('/history/:siteId', AlertController.getAlertHistory);
 
 // GET /api/alerts/resolved/:siteId → get resolved alerts for a site
 router.get('/resolved/:siteId', AlertController.getResolvedAlerts);
-// Get all resolved alerts
+
+// GET all resolved alerts
 router.get('/resolved', AlertController.getAllResolvedAlerts);
+
+
+// Get resolved alerts history by siteId and optional date range
+router.get('/history/resolved/:siteId', AlertController.getResolvedAlertsHistory);
+
+// PUT /api/alerts/resolve-by-type → resolve alerts by type
+router.put('/resolve-by-type', AlertController.resolveAlertByType);
 
 module.exports = router;

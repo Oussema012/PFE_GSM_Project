@@ -10,6 +10,30 @@ exports.createIntervention = async (req, res) => {
     res.status(500).json({ message: 'Error creating intervention', error });
   }
 };
+exports.resolveIntervention = async (req, res) => {
+  try {
+    const { resolutionNotes, validatedBy } = req.body;
+
+    const intervention = await Intervention.findByIdAndUpdate(
+      req.params.id,
+      {
+        status: 'completed',
+        resolutionNotes,
+        validatedBy,
+        resolvedAt: new Date()
+      },
+      { new: true }
+    );
+
+    if (!intervention) {
+      return res.status(404).json({ message: 'Intervention not found' });
+    }
+
+    res.json(intervention);
+  } catch (error) {
+    res.status(500).json({ message: 'Error resolving intervention', error });
+  }
+};
 
 // Get all interventions for a site
 exports.getInterventionsBySite = async (req, res) => {
@@ -63,5 +87,14 @@ exports.deleteIntervention = async (req, res) => {
     res.json({ message: 'Intervention deleted' });
   } catch (error) {
     res.status(500).json({ message: 'Error deleting intervention', error });
+  }
+};
+// Get completed interventions (historical data)
+exports.getCompletedInterventions = async (req, res) => {
+  try {
+    const completed = await Intervention.find({ status: 'completed' }).sort({ plannedDate: -1 });
+    res.json(completed);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching history', error });
   }
 };

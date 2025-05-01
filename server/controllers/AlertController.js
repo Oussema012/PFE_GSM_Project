@@ -1,109 +1,156 @@
-const Alert = require('../models/Alert');
+const Alert = require('../models/Alert'); // Assuming your Alert model is here
 
-// ✅ Create a new alert (only if not already active)
+// Create a new alert
 exports.createAlert = async (req, res) => {
-  const { siteId, type, message } = req.body;
-
   try {
-    // Check if the same active alert already exists
-    const existing = await Alert.findOne({ siteId, type, status: 'active' });
-    if (existing) {
-      return res.status(409).json({ message: 'Alert already active.' });
-    }
-
-    // Create and save the new alert
-    const newAlert = new Alert({ siteId, type, message });
-    await newAlert.save();
-    res.status(201).json(newAlert);
+    const { siteId, type, message } = req.body;
+    const alert = new Alert({
+      siteId,
+      type,
+      message,
+      status: 'active',
+      createdAt: new Date(),
+    });
+    await alert.save();
+    res.status(201).json(alert);
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error });
+    res.status(500).json({ message: 'Error creating alert', error });
   }
 };
 
-// ✅ Get all active alerts for a given site
+// Get active alerts for a site
 exports.getActiveAlertsBySite = async (req, res) => {
-  const { siteId } = req.params;
-
   try {
-    const alerts = await Alert.find({ siteId, status: 'active' }).sort({ timestamp: -1 });
-    res.json(alerts);
+    const alerts = await Alert.find({ siteId: req.params.siteId, status: 'active' });
+    res.status(200).json(alerts);
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error });
+    res.status(500).json({ message: 'Error fetching active alerts', error });
   }
 };
 
-// ✅ Resolve a specific alert by its ID
+// Resolve an alert by its ID
 exports.resolveAlert = async (req, res) => {
-  const { id } = req.params;
-
   try {
-    const alert = await Alert.findById(id);
+    const alert = await Alert.findById(req.params.id);
     if (!alert) {
       return res.status(404).json({ message: 'Alert not found' });
     }
-
-    // Check if the alert is already resolved
-    if (alert.status === 'resolved') {
-      return res.status(400).json({ message: 'Alert is already resolved' });
-    }
-
-    // Mark the alert as resolved
     alert.status = 'resolved';
     alert.resolvedAt = new Date();
     await alert.save();
-
-    res.json({ message: 'Alert resolved successfully', alert });
+    res.status(200).json(alert);
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error });
+    res.status(500).json({ message: 'Error resolving alert', error });
   }
 };
 
-// ✅ Delete an alert by ID
-exports.deleteAlert = async (req, res) => {
-  const { id } = req.params;
-
+// Resolve alerts by type for a site
+exports.resolveAlertByType = async (req, res) => {
   try {
-    const deleted = await Alert.findByIdAndDelete(id);
-    if (!deleted) {
+    const { siteId, type } = req.body;
+    const alerts = await Alert.find({ siteId, type, status: 'active' });
+    if (alerts.length === 0) {
+      return res.status(404).json({ message: 'No active alerts found for this type' });
+    }
+    
+    for (let alert of alerts) {
+      alert.status = 'resolved';
+      alert.resolvedAt = new Date();
+      await alert.save();
+    }
+    
+    res.status(200).json({ message: 'Alerts resolved successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error resolving alerts by type', error });
+  }
+};
+// controllers/AlertController.js
+
+// Fetch resolved alerts by siteId and optional date range
+exports.getResolvedAlertsHistory = async (req, res) => {
+  try {
+    const { siteId } = req.params;
+    const { startDate, endDate } = req.query; // optional query parameters for date range
+    
+    // Build the filter for resolved alerts
+    const filter = {
+      siteId: siteId,
+      status: 'resolved',
+    };
+
+    // If start and end date are provided, filter by resolvedAt date range
+    if (startDate && endDate) {
+      filter.resolvedAt = { $gte: new Date(startDate), $lte: new Date(endDate) };
+    }
+    
+    // Fetch the resolved alerts from the database
+    const alerts = await Alert.find(filter).sort({ resolvedAt: -1 });  // Sort by resolvedAt descending
+    res.status(200).json(alerts);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching resolved alerts history', error });
+  }
+};
+
+
+
+// Delete an alert by ID
+exports.deleteAlert = async (req, res) => {
+  try {
+    const alert = await Alert.findByIdAndDelete(req.params.id);
+    if (!alert) {
       return res.status(404).json({ message: 'Alert not found' });
     }
-
-    res.json({ message: 'Alert deleted' });
+    res.status(200).json({ message: 'Alert deleted successfully' });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error });
+    res.status(500).json({ message: 'Error deleting alert', error });
   }
 };
 
-// ✅ Get all alerts (resolved & active) for a site
+// Get alert history for a site (active and resolved alerts)
 exports.getAlertHistory = async (req, res) => {
-  const { siteId } = req.params;
-
   try {
-    const alerts = await Alert.find({ siteId }).sort({ timestamp: -1 });
-    res.json(alerts);
+    const alerts = await Alert.find({ siteId: req.params.siteId });
+    res.status(200).json(alerts);
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error });
+    res.status(500).json({ message: 'Error fetching alert history', error });
   }
 };
-// ✅ Get resolved alerts for a specific site
+
+// Get resolved alerts for a site
 exports.getResolvedAlerts = async (req, res) => {
-    const { siteId } = req.params;
-  
-    try {
-      const alerts = await Alert.find({ siteId, status: 'resolved' }).sort({ resolvedAt: -1 });
-      res.json(alerts);
-    } catch (error) {
-      res.status(500).json({ message: 'Server error', error });
-    }
-  };
-  
-// ✅ Get all resolved alerts
+  try {
+    const alerts = await Alert.find({ siteId: req.params.siteId, status: 'resolved' });
+    res.status(200).json(alerts);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching resolved alerts', error });
+  }
+};
+
+// Get all resolved alerts
 exports.getAllResolvedAlerts = async (req, res) => {
-    try {
-      const resolvedAlerts = await Alert.find({ status: 'resolved' }).sort({ resolvedAt: -1 });
-      res.json(resolvedAlerts);
-    } catch (error) {
-      res.status(500).json({ message: 'Server error', error });
+  try {
+    const alerts = await Alert.find({ status: 'resolved' });
+    res.status(200).json(alerts);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching resolved alerts', error });
+  }
+};
+// controllers/AlertController.js
+exports.acknowledgeAlert = async (req, res) => {
+  try {
+    const alert = await Alert.findByIdAndUpdate(
+      req.params.id,
+      {
+        acknowledged: true,
+        acknowledgedAt: new Date()  // Set the current date and time
+      },
+      { new: true }  // Return the updated document
+    );
+    if (!alert) {
+      return res.status(404).json({ message: 'Alert not found' });
     }
-  };
-  
+    res.json(alert);  // Return the updated alert
+  } catch (error) {
+    res.status(500).json({ message: 'Error acknowledging alert', error });
+  }
+};

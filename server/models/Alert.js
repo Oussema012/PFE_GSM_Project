@@ -16,6 +16,7 @@ const alertSchema = new Schema({
   createdAt: { type: Date, default: Date.now }  // Timestamp when the alert was created
 });
 
+
 const Alert = mongoose.model('Alert', alertSchema);
 
 module.exports = Alert;
