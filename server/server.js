@@ -1,40 +1,45 @@
 const express = require('express');
 const cors = require('cors');
 require("dotenv").config();
-require("./config/mongoose");
-
-// Import bodyParser if you still want to use it (optional since express.json() is enough)
-const bodyParser = require('body-parser');
-
-// Route files
-const siteRoutes = require('./routes/Site.routes');
-const equipmentRoutes = require('./routes/Equipment.routes');
-const alertRoutes = require('./routes/Alert.routes'); 
-const interventionRoutes = require('./routes/Intervention.routes'); 
-const reportRoutes = require('./routes/report.routes'); // ✅ NEW
+require("./config/mongoose"); // MongoDB connection
 
 const app = express();
 
 // Middleware
-app.use(cors()); // Optional: allow cross-origin requests if needed
-
-// Body parser (express.json() can handle this, body-parser is redundant)
-app.use(express.json()); 
+app.use(cors());
+app.use(express.json()); // For parsing JSON request bodies
 
 // Routes
-app.use('/api/sites', siteRoutes);  // Routes for managing sites
-app.use('/api/equipment', equipmentRoutes);  // Routes for managing equipment
-app.use('/api/alerts', alertRoutes);  // Routes for managing alerts
-app.use('/api/interventions', interventionRoutes);  // Routes for managing interventions
-app.use('/api/reports', reportRoutes); // ✅ Mount report routes
+const authRoutes = require('./routes/auth.routes'); // ✅ Auth route (your file)
+const authMiddleware = require('./middleware/auth'); // ✅ Role-based auth middleware
+const siteRoutes = require('./routes/Site.routes');
+const equipmentRoutes = require('./routes/Equipment.routes');
+const alertRoutes = require('./routes/Alert.routes');
+const interventionRoutes = require('./routes/Intervention.routes');
+const reportRoutes = require('./routes/report.routes');
 
-// Default route (for testing)
+// ✅ Auth routes
+app.use('/api/auth', authRoutes);  // Authentication routes for signup/login
+
+// ✅ Protected API routes
+app.use('/api/sites', authMiddleware(['admin', 'engineer', 'technician']), siteRoutes);
+app.use('/api/equipment', authMiddleware(['admin', 'engineer', 'technician']), equipmentRoutes);
+app.use('/api/alerts', authMiddleware(['admin', 'engineer', 'technician']), alertRoutes);
+app.use('/api/interventions', authMiddleware(['admin', 'engineer', 'technician']), interventionRoutes);
+app.use('/api/reports', authMiddleware(['admin', 'engineer']), reportRoutes); // Reports: no technician access
+
+// Test route to verify role protection (optional)
+app.get('/api/test-admin', authMiddleware(['admin']), (req, res) => {
+  res.send("✅ You are an admin");
+});
+
+// Root endpoint
 app.get('/', (req, res) => {
   res.send('🚀 GSM Monitoring API is running');
 });
 
-// Start the server
-const PORT = process.env.PORT || 5000; // Add a fallback port value
+// Start server
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port: ${PORT}`);
 });
