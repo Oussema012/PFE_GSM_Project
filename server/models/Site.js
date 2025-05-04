@@ -4,16 +4,16 @@ const siteSchema = new mongoose.Schema({
   site_id: {
     type: String,
     required: true,
-    unique: true, // Ensure site_id is unique for each site
+    unique: true // Ensure site_id is unique for each site
   },
   name: {
     type: String,
-    required: true,
+    required: true
   },
   status: {
     type: String,
-    required: true,
-  },
+    required: true
+  }
 }, { timestamps: true });
 
 const Site = mongoose.model('Site', siteSchema);

@@ -2,19 +2,19 @@ const express = require('express');
 const router = express.Router();
 const InterventionController = require('../controllers/InterventionController');
 
-// POST → Create intervention
+// CREATE: Add a new intervention
 router.post('/', InterventionController.createIntervention);
 
-// GET → Get all interventions by siteId
-router.get('/:siteId', InterventionController.getInterventionsBySite);
+// READ: Get all interventions for a specific site
+router.get('/site/:siteId', InterventionController.getInterventionsBySite);
 
-// GET → Get single intervention by ID
-router.get('/details/:id', InterventionController.getInterventionById);
+// READ: Get details of a specific intervention by ID
+router.get('/:id', InterventionController.getInterventionById);
 
-// PUT → Update intervention status
+// UPDATE: Update the status or data of a specific intervention
 router.put('/:id', InterventionController.updateInterventionStatus);
 
-// DELETE → Delete intervention
+// DELETE: Remove a specific intervention
 router.delete('/:id', InterventionController.deleteIntervention);
 
 module.exports = router;

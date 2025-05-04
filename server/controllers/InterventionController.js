@@ -10,6 +10,8 @@ exports.createIntervention = async (req, res) => {
     res.status(500).json({ message: 'Error creating intervention', error });
   }
 };
+
+// Resolve an intervention
 exports.resolveIntervention = async (req, res) => {
   try {
     const { resolutionNotes, validatedBy } = req.body;
@@ -89,6 +91,7 @@ exports.deleteIntervention = async (req, res) => {
     res.status(500).json({ message: 'Error deleting intervention', error });
   }
 };
+
 // Get completed interventions (historical data)
 exports.getCompletedInterventions = async (req, res) => {
   try {
@@ -96,5 +99,39 @@ exports.getCompletedInterventions = async (req, res) => {
     res.json(completed);
   } catch (error) {
     res.status(500).json({ message: 'Error fetching history', error });
+  }
+};
+
+// Schedule a new intervention (with extra planning info)
+exports.scheduleIntervention = async (req, res) => {
+  try {
+    const {
+      siteId,
+      description,
+      plannedDate,
+      timeSlot,
+      technician,
+      team,
+      priority
+    } = req.body;
+
+    if (!siteId || !description || !plannedDate) {
+      return res.status(400).json({ message: 'siteId, description and plannedDate are required' });
+    }
+
+    const newIntervention = new Intervention({
+      siteId,
+      description,
+      plannedDate,
+      timeSlot,
+      technician,
+      team,
+      priority
+    });
+
+    await newIntervention.save();
+    res.status(201).json(newIntervention);
+  } catch (error) {
+    res.status(500).json({ message: 'Error scheduling intervention', error });
   }
 };

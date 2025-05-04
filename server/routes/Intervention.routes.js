@@ -14,10 +14,16 @@ router.get('/details/:id', InterventionController.getInterventionById);
 // PUT → Update intervention status
 router.put('/:id', InterventionController.updateInterventionStatus);
 
+// PUT → Resolve intervention
+router.put('/:id/resolve', InterventionController.resolveIntervention);
+
 // DELETE → Delete intervention
 router.delete('/:id', InterventionController.deleteIntervention);
-router.put('/:id/resolve', InterventionController.resolveIntervention);
+
 // GET → Get completed interventions (history)
 router.get('/history/interventions', InterventionController.getCompletedInterventions);
+
+// POST → Schedule an intervention
+router.post('/schedule', InterventionController.scheduleIntervention);
 
 module.exports = router;

@@ -26,3 +26,4 @@ const authMiddleware = (allowedRoles = []) => {
 };
 
 module.exports = authMiddleware;
+ // Correct export of authMiddleware

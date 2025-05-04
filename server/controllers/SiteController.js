@@ -1,9 +1,10 @@
 const Site = require('../models/Site');
+const User = require('../models/User');
 
 // Controller to fetch all sites
 const getSites = async (req, res) => {
   try {
-    const sites = await Site.find(); // Retrieve all sites
+    const sites = await Site.find();
     res.status(200).json(sites);
   } catch (err) {
     res.status(500).json({ message: 'Error fetching sites', error: err });
@@ -13,7 +14,7 @@ const getSites = async (req, res) => {
 // Controller to fetch a specific site by ID
 const getSiteById = async (req, res) => {
   try {
-    const site = await Site.findById(req.params.id); // Retrieve site by ID
+    const site = await Site.findById(req.params.id);
     if (!site) {
       return res.status(404).json({ message: 'Site not found' });
     }
@@ -45,15 +46,14 @@ const updateSite = async (req, res) => {
   try {
     const { name, status } = req.body;
 
-    // Validation for the incoming data
     if (!name && !status) {
       return res.status(400).json({ message: 'Name or status required for update' });
     }
 
     const updatedSite = await Site.findByIdAndUpdate(
-      req.params.id, // The site ID to be updated
-      req.body, // The updated fields
-      { new: true, runValidators: true } // Return the updated site and validate input
+      req.params.id,
+      req.body,
+      { new: true, runValidators: true }
     );
 
     if (!updatedSite) {
@@ -62,7 +62,7 @@ const updateSite = async (req, res) => {
 
     res.status(200).json(updatedSite);
   } catch (err) {
-    console.error('Error updating site:', err);  // Log the error to the console
+    console.error('Error updating site:', err);
     res.status(500).json({ message: 'Error updating site', error: err.message || err });
   }
 };
@@ -77,8 +77,8 @@ const updateSiteStatus = async (req, res) => {
     }
 
     const updatedSite = await Site.findOneAndUpdate(
-      { site_id }, // Search by site_id field
-      { status },   // Update the status field
+      { site_id },
+      { status },
       { new: true, runValidators: true }
     );
 
@@ -92,33 +92,31 @@ const updateSiteStatus = async (req, res) => {
   }
 };
 
-// Controller for searching/filtering sites (by name or status)
+// Controller to search/filter sites by name or status
 const searchSites = async (req, res) => {
   try {
-    const { name, status } = req.query; // Retrieve query parameters
+    const { name, status } = req.query;
     const searchQuery = {};
 
     if (name) {
-      searchQuery.name = { $regex: name, $options: 'i' }; // Case-insensitive search
+      searchQuery.name = { $regex: name, $options: 'i' };
     }
 
     if (status) {
       searchQuery.status = status;
     }
 
-    const sites = await Site.find(searchQuery); // Fetch filtered sites
+    const sites = await Site.find(searchQuery);
     res.status(200).json(sites);
   } catch (err) {
     res.status(500).json({ message: 'Error searching sites', error: err });
   }
 };
 
-// Function to delete a site by its ID
+// Controller to delete a site by ID
 const deleteSite = async (req, res) => {
-  const siteId = req.params.id;
-
   try {
-    const result = await Site.findByIdAndDelete(siteId); // Delete the site by ID
+    const result = await Site.findByIdAndDelete(req.params.id);
 
     if (!result) {
       return res.status(404).json({ message: 'Site not found' });
@@ -130,6 +128,30 @@ const deleteSite = async (req, res) => {
   }
 };
 
+// Controller to assign sites to a technician
+const assignTechnicianToSites = async (req, res) => {
+  const { technicianId, siteIds } = req.body;
+
+  if (!technicianId || !siteIds || !Array.isArray(siteIds)) {
+    return res.status(400).json({ message: 'Technician ID and an array of site IDs are required' });
+  }
+
+  try {
+    const technician = await User.findById(technicianId);
+    if (!technician || technician.role !== 'technician') {
+      return res.status(404).json({ message: 'Technician not found' });
+    }
+
+    technician.assignedSites = [...new Set([...technician.assignedSites, ...siteIds])];
+    await technician.save();
+
+    res.status(200).json({ message: 'Technician assigned to sites successfully', technician });
+  } catch (err) {
+    res.status(500).json({ message: 'Error assigning technician to sites', error: err });
+  }
+};
+
+// Export all controllers
 module.exports = {
   getSites,
   getSiteById,
@@ -137,5 +159,6 @@ module.exports = {
   updateSite,
   updateSiteStatus,
   searchSites,
-  deleteSite, // Export the delete function
+  deleteSite,
+  assignTechnicianToSites
 };
