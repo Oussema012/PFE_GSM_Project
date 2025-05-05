@@ -17,7 +17,7 @@ const alertRoutes = require('./routes/Alert.routes');
 const interventionRoutes = require('./routes/Intervention.routes');
 const reportRoutes = require('./routes/report.routes');
 const userRoutes = require('./routes/user.routes');
-
+const mapRoutes = require('./routes/map.routes');
 // ✅ Auth routes
 app.use('/api/auth', authRoutes);  // Authentication routes for signup/login
 
@@ -28,6 +28,7 @@ app.use('/api/alerts', authMiddleware(['admin', 'engineer', 'technician']), aler
 app.use('/api/interventions', authMiddleware(['admin', 'engineer', 'technician']), interventionRoutes);
 app.use('/api/reports', authMiddleware(['admin', 'engineer']), reportRoutes); // Reports: no technician access
 app.use('/api/users', userRoutes);
+app.use('/api', mapRoutes);
 // Test route to verify role protection (optional)
 app.get('/api/test-admin', authMiddleware(['admin']), (req, res) => {
   res.send("✅ You are an admin");

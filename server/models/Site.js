@@ -1,21 +1,26 @@
+// models/Site.js
 const mongoose = require('mongoose');
 
 const siteSchema = new mongoose.Schema({
-  site_id: {
-    type: String,
-    required: true,
-    unique: true // Ensure site_id is unique for each site
+  site_id: String,
+  name: String,
+  status: String,
+  location: {
+    lat: Number,
+    lon: Number,
+    address: String,
+    region: String,
   },
-  name: {
-    type: String,
-    required: true
-  },
-  status: {
-    type: String,
-    required: true
-  }
-}, { timestamps: true });
+  technology: [String],
+  site_type: String,
+  power_status: String,
+  battery_level: Number,
+  temperature: Number,
+  last_updated: Date,
+  alarms: Array,
+  controller_id: String,
+  vendor: String,
+  ac_status: String
+});
 
-const Site = mongoose.model('Site', siteSchema);
-
-module.exports = Site;
+module.exports = mongoose.model('Site', siteSchema);
