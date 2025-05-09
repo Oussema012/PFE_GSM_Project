@@ -1,217 +1,167 @@
-const fs = require('fs');
-const path = require('path');
-const PDFDocument = require('pdfkit');
-const { ChartJSNodeCanvas } = require('chartjs-node-canvas');
-const Alert = require('../models/Alert');
-const Intervention = require('../models/Intervention');
-const Report = require('../models/Report');
-
-const generateAlertChartImage = async (alertStats) => {
-  const width = 500;
-  const height = 300;
-  const chartJSNodeCanvas = new ChartJSNodeCanvas({ width, height });
-
-  const configuration = {
-    type: 'bar',
-    data: {
-      labels: ['Total', 'Active', 'Resolved'],
-      datasets: [{
-        label: 'Alert Statistics',
-        data: [alertStats.total, alertStats.active, alertStats.resolved],
-        backgroundColor: ['#36A2EB', '#FF6384', '#4BC0C0']
-      }]
-    },
-    options: {
-      plugins: {
-        legend: { display: false },
-        title: {
-          display: true,
-          text: 'Alert Status Distribution',
-          font: { size: 16 }
-        }
-      },
-      scales: {
-        y: {
-          beginAtZero: true,
-          ticks: { precision: 0 }
-        }
-      }
-    }
-  };
-
-  return await chartJSNodeCanvas.renderToBuffer(configuration);
-};
-
 exports.generateReport = async (req, res) => {
   try {
     const { siteId, fromDate, toDate, reportType = 'summary', generatedBy = 'system' } = req.body;
 
+    if (!siteId || !fromDate || !toDate) {
+      return res.status(400).json({ message: 'Missing required parameters.' });
+    }
+
+    const startDate = new Date(fromDate);
+    const endDate = new Date(toDate);
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      return res.status(400).json({ message: 'Invalid date format.' });
+    }
+
+    // Normalize end time to include full day
+    if (toDate.length <= 10) {
+      endDate.setHours(23, 59, 59, 999);
+    }
+
+    // Check if report already exists
     const existingReport = await Report.findOne({
       siteId,
-      fromDate: new Date(fromDate),
-      toDate: new Date(toDate),
+      fromDate: startDate,
+      toDate: endDate,
       reportType
     });
 
     if (existingReport) {
-      return res.status(400).json({ message: 'Report already exists for the given date range and report type.' });
+      return res.status(400).json({ message: 'Report already exists for this range and type.' });
     }
 
-    const startDate = new Date(fromDate);
-    const endDate = toDate.length <= 10 ? 
-      new Date(new Date(toDate).setHours(23, 59, 59, 999)) : 
-      new Date(toDate);
-
+    // Fetch alerts
     const alerts = await Alert.find({
+      siteId,
       $or: [
-        {
-          site_id: siteId,
-          $or: [
-            { createdAt: { $gte: startDate, $lte: endDate } },
-            { timestamp: { $gte: startDate, $lte: endDate } }
-          ]
-        },
-        {
-          siteId: siteId,
-          $or: [
-            { createdAt: { $gte: startDate, $lte: endDate } },
-            { timestamp: { $gte: startDate, $lte: endDate } }
-          ]
-        }
+        { createdAt: { $gte: startDate, $lte: endDate } },
+        { timestamp: { $gte: startDate, $lte: endDate } }
       ]
     });
-
-    const resolvedAlerts = alerts.filter(alert => alert.status === 'resolved');
-    const activeAlerts = alerts.filter(alert => alert.status === 'active');
 
     const alertStats = {
       total: alerts.length,
-      active: activeAlerts.length,
-      resolved: resolvedAlerts.length,
+      active: alerts.filter(a => a.status === 'active').length,
+      resolved: alerts.filter(a => a.status === 'resolved').length
     };
 
+    // Fetch interventions
     const interventions = await Intervention.find({
-      $or: [
-        { site_id: siteId, createdAt: { $gte: startDate, $lte: endDate } },
-        { siteId: siteId, createdAt: { $gte: startDate, $lte: endDate } }
-      ]
+      siteId,
+      createdAt: { $gte: startDate, $lte: endDate }
     });
 
     const interventionStats = {
-      total: interventions.length,
+      total: interventions.length
     };
 
-    const reportData = {
-      alertStats,
-      interventionStats,
-    };
-
+    // Save the report record
     const report = new Report({
       siteId,
       reportType,
       fromDate: startDate,
       toDate: endDate,
       generatedBy,
-      data: reportData
+      data: { alertStats, interventionStats }
     });
-
     await report.save();
 
-    const alertChartImage = await generateAlertChartImage(alertStats);
+    // Generate charts
+    const { barChartImage, lineChartImage } = await generateAlertCharts(alertStats);
 
+    // Create reports directory if not exists
     const reportsDir = path.join(__dirname, '..', 'reports');
-    if (!fs.existsSync(reportsDir)) {
-      fs.mkdirSync(reportsDir);
-    }
+    if (!fs.existsSync(reportsDir)) fs.mkdirSync(reportsDir);
 
-    const formattedDate = new Date().toISOString().split('T')[0];
-    const fileName = `report_${siteId}_${formattedDate}_${report._id}.pdf`;
+    const safeDate = new Date().toISOString().split('T')[0];
+    const fileName = `report_${siteId}_${safeDate}_${report._id}.pdf`.replace(/[:\/\\?<>|"]/g, '');
     const filePath = path.join(reportsDir, fileName);
 
+    // Create PDF document
+    const doc = new PDFDocument({ autoFirstPage: false, margin: 50 });
+    const stream = fs.createWriteStream(filePath);
+    doc.pipe(stream);
+
     let currentPage = 1;
-    let totalPages = alerts.length > 0 ? 2 : 1;
+    const totalPages = alerts.length > 0 ? 3 : 2;
 
-    const doc = new PDFDocument({ autoFirstPage: false });
-    doc.pipe(fs.createWriteStream(filePath));
-
-    const addPageFooter = () => {
-      doc.fontSize(8).text(
-        `Page ${currentPage} of ${totalPages}`,
-        50,
-        doc.page.height - 50,
-        { align: 'center' }
-      );
+    const addFooter = () => {
+      doc.fontSize(8).text(`Page ${currentPage} of ${totalPages}`, 50, doc.page.height - 40, { align: 'center' });
     };
 
     const addNewPage = () => {
       doc.addPage();
+      addFooter();
       currentPage++;
     };
 
+    // Page 1: Summary
     doc.addPage();
-
     doc.fontSize(20).text(`Site Report: ${siteId}`, { align: 'center' });
     doc.moveDown();
-    doc.fontSize(12).text(`Report Type: ${reportType}`);
-    doc.text(`Date Range: ${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}`);
-    doc.text(`Generated By: ${generatedBy}`);
-    doc.text(`Generated On: ${new Date().toLocaleString()}`);
-    doc.moveDown();
+    doc.fontSize(12)
+      .text(`Report Type: ${reportType}`)
+      .text(`Date Range: ${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}`)
+      .text(`Generated By: ${generatedBy}`)
+      .text(`Generated On: ${new Date().toLocaleString()}`)
+      .moveDown();
 
-    doc.fontSize(16).text('Alert Statistics', { underline: true });
-    doc.moveDown(0.5);
-    doc.fontSize(12).text(`Total Alerts: ${alertStats.total}`);
-    doc.text(`Active Alerts: ${alertStats.active}`);
-    doc.text(`Resolved Alerts: ${alertStats.resolved}`);
-    doc.moveDown();
+    doc.fontSize(16).text('Alert Statistics', { underline: true }).moveDown(0.5);
+    doc.fontSize(12)
+      .text(`Total Alerts: ${alertStats.total}`)
+      .text(`Active Alerts: ${alertStats.active}`)
+      .text(`Resolved Alerts: ${alertStats.resolved}`)
+      .moveDown();
 
-    doc.fontSize(16).text('Intervention Statistics', { underline: true });
-    doc.moveDown(0.5);
+    doc.fontSize(16).text('Intervention Statistics', { underline: true }).moveDown(0.5);
     doc.fontSize(12).text(`Total Interventions: ${interventionStats.total}`);
     doc.moveDown();
 
-    if (alertStats.total > 0) {
-      doc.image(alertChartImage, {
-        fit: [500, 300],
-        align: 'center'
-      });
-    } else {
-      doc.text('No alerts found in the specified date range.', { align: 'center' });
-    }
+    doc.image(barChartImage, { fit: [500, 280], align: 'center' }).moveDown();
+    doc.image(lineChartImage, { fit: [500, 280], align: 'center' });
 
-    addPageFooter();
+    addFooter();
 
+    // Page 2: Alerts
     if (alerts.length > 0) {
       addNewPage();
-      
-      doc.fontSize(16).text('Alert Details', { underline: true });
-      doc.moveDown(0.5);
-      
+      doc.fontSize(16).text('Alert Details', { underline: true }).moveDown();
+
       alerts.forEach((alert, index) => {
-        doc.fontSize(12).text(`Alert #${index + 1}: ${alert.message || 'Untitled Alert'}`);
-        doc.fontSize(10).text(`ID: ${alert._id}`);
-        doc.text(`Status: ${alert.status}`);
-        doc.text(`Site ID: ${alert.siteId || alert.site_id}`);
-        if (alert.timestamp) doc.text(`Timestamp: ${new Date(alert.timestamp).toLocaleString()}`);
-        if (alert.createdAt) doc.text(`Created: ${new Date(alert.createdAt).toLocaleString()}`);
-        if (alert.resolvedAt) doc.text(`Resolved: ${new Date(alert.resolvedAt).toLocaleString()}`);
-        doc.moveDown();
+        doc.fontSize(12).text(`Alert #${index + 1}: ${alert.message || 'Untitled'}`);
+        doc.fontSize(10)
+          .text(`ID: ${alert._id}`)
+          .text(`Status: ${alert.status}`)
+          .text(`Site ID: ${alert.siteId}`)
+          .text(`Timestamp: ${alert.timestamp ? new Date(alert.timestamp).toLocaleString() : 'N/A'}`)
+          .text(`Created At: ${alert.createdAt ? new Date(alert.createdAt).toLocaleString() : 'N/A'}`)
+          .text(`Resolved At: ${alert.resolvedAt ? new Date(alert.resolvedAt).toLocaleString() : 'N/A'}`)
+          .moveDown();
       });
 
-      addPageFooter();
+      addFooter();
     }
 
+    // Optionally add interventions detail page here
+
+    // Finalize PDF
     doc.end();
 
-    res.status(201).json({
-      message: 'Report generated successfully.',
-      filePath: filePath,
-      report: report,
-      alertCount: alerts.length,
-      interventionCount: interventions.length
+    stream.on('finish', () => {
+      res.status(201).json({
+        message: 'Report generated successfully.',
+        filePath,
+        report,
+        alertCount: alerts.length,
+        interventionCount: interventions.length
+      });
+    });
+
+    stream.on('error', (err) => {
+      res.status(500).json({ error: 'Error writing PDF file: ' + err.message });
     });
 
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('Report generation error:', err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 };

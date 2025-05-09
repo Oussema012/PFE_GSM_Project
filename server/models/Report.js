@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
 const ReportSchema = new Schema({
-  siteId: { type: String, required: true },
+  siteId: { type: String, required: true }, // Consider using ObjectId if you are linking to another collection
   reportType: { 
     type: String, 
     enum: ['summary', 'daily', 'weekly', 'monthly'], 
@@ -11,18 +11,23 @@ const ReportSchema = new Schema({
   fromDate: { type: Date, required: true },
   toDate: { type: Date, required: true },
   generatedAt: { type: Date, default: Date.now },
-  generatedBy: { type: String, default: 'system' }, // Track user/admin who generated the report
+  generatedBy: { type: String, default: 'system' },
   data: {
     alertStats: {
       total: { type: Number, default: 0 },
       active: { type: Number, default: 0 },
-      resolved: { type: Number, default: 0 }
+      resolved: { type: Number, default: 0 },
     },
     interventionStats: {
-      total: { type: Number, default: 0 }
-      // You can add more fields if needed, e.g., by type of intervention
+      total: { type: Number, default: 0 },
+      averageDuration: { type: Number, default: 0 }, // Added: to track average duration for interventions
     },
-    // You can add more custom statistics or data as needed in the future
+    // More statistics can be added here
+  },
+  additionalInfo: {
+    type: Map,
+    of: Schema.Types.Mixed,
+    default: {}
   }
 });
 

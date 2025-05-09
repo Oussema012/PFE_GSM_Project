@@ -27,13 +27,44 @@ const getSiteById = async (req, res) => {
 // Controller to create a new site
 const createSite = async (req, res) => {
   try {
-    const { site_id, name, status } = req.body;
+    const {
+      site_id,
+      name,
+      status,
+      location,
+      technology,
+      site_type,
+      power_status,
+      battery_level,
+      temperature,
+      last_updated,
+      alarms,
+      controller_id,
+      vendor,
+      ac_status
+    } = req.body;
 
     if (!site_id || !name || !status) {
       return res.status(400).json({ message: 'site_id, name, and status are required' });
     }
 
-    const newSite = new Site({ site_id, name, status });
+    const newSite = new Site({
+      site_id,
+      name,
+      status,
+      location,
+      technology,
+      site_type,
+      power_status,
+      battery_level,
+      temperature,
+      last_updated,
+      alarms,
+      controller_id,
+      vendor,
+      ac_status
+    });
+
     await newSite.save();
     res.status(201).json(newSite);
   } catch (err) {
@@ -41,15 +72,10 @@ const createSite = async (req, res) => {
   }
 };
 
+
 // Controller to update a specific site
 const updateSite = async (req, res) => {
   try {
-    const { name, status } = req.body;
-
-    if (!name && !status) {
-      return res.status(400).json({ message: 'Name or status required for update' });
-    }
-
     const updatedSite = await Site.findByIdAndUpdate(
       req.params.id,
       req.body,
@@ -62,10 +88,10 @@ const updateSite = async (req, res) => {
 
     res.status(200).json(updatedSite);
   } catch (err) {
-    console.error('Error updating site:', err);
     res.status(500).json({ message: 'Error updating site', error: err.message || err });
   }
 };
+
 
 // Controller to update site status
 const updateSiteStatus = async (req, res) => {

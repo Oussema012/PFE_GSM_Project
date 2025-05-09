@@ -16,7 +16,7 @@ const EquipmentSchema = new mongoose.Schema({
   status: {
     type: String,
     required: true,
-    enum: ['active', 'inactive', 'maintenance']
+    enum: ['operational', 'faulty', 'maintenance']
   }
 }, { timestamps: true });
 

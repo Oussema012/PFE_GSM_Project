@@ -17,7 +17,15 @@ exports.createAlert = async (req, res) => {
     res.status(500).json({ message: 'Error creating alert', error });
   }
 };
-
+//get all alerts
+exports.getAllAlerts = async (req, res) => {
+  try {
+    const alerts = await Alert.find();
+    res.status(200).json(alerts);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
 // Get active alerts for a site
 exports.getActiveAlertsBySite = async (req, res) => {
   try {

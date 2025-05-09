@@ -5,6 +5,8 @@ const { Schema } = mongoose;
 // Define the schema for alerts
 const alertSchema = new Schema({
   siteId: { type: String, required: true },
+  // siteId :{  type: mongoose.Schema.Types.ObjectId,
+  //   ref:'Site'}
   type: { type: String, required: true },
   message: { type: String, required: true },
   status: { 
