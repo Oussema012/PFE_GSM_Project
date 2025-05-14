@@ -3,13 +3,13 @@ const router = express.Router();
 const ReportController = require('../controllers/ReportController');
 const Report = require('../models/Report');
 
-// Generate a new report
+// Route to generate a new report
 router.post('/generate', ReportController.generateReport);
 
-// Get all reports for a specific site
+// Get saved reports for a site
 router.get('/:siteId', async (req, res) => {
   try {
-    const reports = await Report.find({ siteId: req.params.siteId }).sort({ generatedAt: -1 });
+    const reports = await Report.find({ siteId: req.params.siteId });
     res.json(reports);
   } catch (err) {
     console.error(err);
@@ -17,7 +17,7 @@ router.get('/:siteId', async (req, res) => {
   }
 });
 
-// Get reports for a site within a specific date range
+// Get reports by siteId and specific date range
 router.get('/date-range/:siteId', async (req, res) => {
   try {
     const { fromDate, toDate } = req.query;
@@ -30,7 +30,7 @@ router.get('/date-range/:siteId', async (req, res) => {
       siteId: req.params.siteId,
       fromDate: { $lte: new Date(toDate) },
       toDate: { $gte: new Date(fromDate) },
-    }).sort({ generatedAt: -1 });
+    });
 
     res.json(reports);
   } catch (err) {
@@ -39,11 +39,13 @@ router.get('/date-range/:siteId', async (req, res) => {
   }
 });
 
-// Get a specific report by ID
+// Route to get report by ID
 router.get('/report/:id', async (req, res) => {
   try {
     const report = await Report.findById(req.params.id);
-    if (!report) return res.status(404).json({ error: 'Report not found' });
+    if (!report) {
+      return res.status(404).json({ error: 'Report not found' });
+    }
     res.json(report);
   } catch (err) {
     console.error(err);
@@ -51,11 +53,13 @@ router.get('/report/:id', async (req, res) => {
   }
 });
 
-// Delete a report by ID
+// Route to delete a report by ID
 router.delete('/:id', async (req, res) => {
   try {
     const report = await Report.findByIdAndDelete(req.params.id);
-    if (!report) return res.status(404).json({ error: 'Report not found' });
+    if (!report) {
+      return res.status(404).json({ error: 'Report not found' });
+    }
     res.json({ message: 'Report deleted successfully' });
   } catch (err) {
     console.error(err);

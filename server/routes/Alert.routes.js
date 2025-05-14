@@ -11,8 +11,8 @@ router.get('/', AlertController.getAllAlerts);
 // GET /api/alerts/active/:siteId → get active alerts for a site
 router.get('/active/:siteId', AlertController.getActiveAlertsBySite);
 
-// PUT /api/alerts/:id → resolve an alert by ID
-router.put('/:id', AlertController.resolveAlert);
+// PUT /api/alerts/resolve/:id → resolve an alert by ID
+router.put('/resolve/:id', AlertController.resolveAlert);
 
 // DELETE /api/alerts/:id → delete an alert by ID
 router.delete('/:id', AlertController.deleteAlert);

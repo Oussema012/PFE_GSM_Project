@@ -1,3 +1,10 @@
+const Alert = require('../models/Alert');
+const Intervention = require('../models/Intervention');
+const fs = require('fs');
+const path = require('path');
+const PDFDocument = require('pdfkit');
+const { generateAlertCharts } = require('./chartGeneration'); // Importing the chart generation function
+const Report = require('../models/Report');
 exports.generateReport = async (req, res) => {
   try {
     const { siteId, fromDate, toDate, reportType = 'summary', generatedBy = 'system' } = req.body;

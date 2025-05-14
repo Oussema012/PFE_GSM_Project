@@ -1,24 +1,23 @@
-// models/Alert.js
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
-// Define the schema for alerts
 const alertSchema = new Schema({
-  siteId: { type: String, required: true },
-  // siteId :{  type: mongoose.Schema.Types.ObjectId,
-  //   ref:'Site'}
+  siteId: { 
+    type: String,   // ← Now accepting string IDs like "SITE001"
+    required: true 
+  },
   type: { type: String, required: true },
   message: { type: String, required: true },
   status: { 
     type: String, 
-    enum: ['active', 'resolved'],  // 'active' or 'resolved' status
+    enum: ['active', 'resolved'],
     default: 'active' 
   },
-  resolvedAt: { type: Date, default: null },  // Only set this when resolving
-  createdAt: { type: Date, default: Date.now }  // Timestamp when the alert was created
+  resolvedAt: { type: Date, default: null },
+  createdAt: { type: Date, default: Date.now },
+  acknowledged: { type: Boolean, default: false },
+  acknowledgedAt: { type: Date, default: null },
 });
 
-
 const Alert = mongoose.model('Alert', alertSchema);
-
 module.exports = Alert;

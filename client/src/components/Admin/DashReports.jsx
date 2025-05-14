@@ -36,13 +36,18 @@ const DashReport = () => {
   };
 
   const generateReport = async () => {
+    // Validate inputs
     if (!siteId || !fromDate || !toDate) {
       setError('Please fill in all required fields.');
       return;
     }
+  
+    // Set loading state and clear any previous errors
     setLoading(true);
     setError('');
+  
     try {
+      // Send the request to the API
       const response = await axios.post(`${API_BASE_URL}/api/reports/generate`, {
         siteId,
         fromDate,
@@ -50,14 +55,25 @@ const DashReport = () => {
         reportType,
         generatedBy: 'user',
       });
-      fetchReports();
-      alert('Report generated successfully!');
+  
+      // Check if the response is successful
+      if (response.status === 200) {
+        fetchReports();  // Fetch the updated reports list after generating the report
+        alert('Report generated successfully!');
+      } else {
+        throw new Error('Failed to generate report: Unexpected response status.');
+      }
+  
     } catch (err) {
-      setError('Failed to generate report: ' + (err.response?.data?.error || err.message));
+      // Handle errors (both API-specific and generic)
+      const errorMessage = err.response?.data?.error || err.message || 'An unknown error occurred.';
+      setError(`Failed to generate report: ${errorMessage}`);
     } finally {
+      // Always stop loading state after request completes
       setLoading(false);
     }
   };
+  
 
   const deleteReport = async (id) => {
     if (!window.confirm('Are you sure you want to delete this report?')) return;

@@ -15,7 +15,7 @@ import {
   FiCalendar
 } from 'react-icons/fi';
 
-const AlertDashboard = () => {
+const DashNotifications = () => {
   const [alerts, setAlerts] = useState([]);
   const [siteId, setSiteId] = useState('');
   const [filter, setFilter] = useState('active');
@@ -26,6 +26,7 @@ const AlertDashboard = () => {
   const [successMessage, setSuccessMessage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [acknowledging, setAcknowledging] = useState(null);
+  const [resolving, setResolving] = useState(null);
   const [filteredAlerts, setFilteredAlerts] = useState([]);
 
   const fetchAlerts = async () => {
@@ -42,7 +43,6 @@ const AlertDashboard = () => {
         } else if (filter === 'resolved') {
           url = `http://localhost:3000/api/alerts/resolved/${siteId}`;
           if (startDate && endDate) {
-            // Validate date range
             if (new Date(endDate) < new Date(startDate)) {
               setError('End date cannot be before start date');
               setLoading(false);
@@ -74,12 +74,13 @@ const AlertDashboard = () => {
       }
 
       const response = await axios.get(url);
-      setAlerts(response.data);
+      console.log('Fetched alerts:', JSON.stringify(response.data, null, 2));
+      setAlerts(Array.isArray(response.data) ? response.data : []);
     } catch (err) {
       if (err.response?.status === 404) {
         setError('Failed to fetch alerts: Endpoint not found. Please check site ID or server configuration.');
       } else {
-        setError(`Failed to fetch alerts: ${err.message}`);
+        setError(`Failed to fetch alerts: ${err.response?.data?.message || err.message}`);
       }
     } finally {
       setLoading(false);
@@ -87,6 +88,11 @@ const AlertDashboard = () => {
   };
 
   const acknowledgeAlert = async (id) => {
+    if (!/^[0-9a-fA-F]{24}$/.test(id)) {
+      setError('Invalid alert ID format');
+      return;
+    }
+
     setAcknowledging(id);
     setError('');
     setSuccessMessage('');
@@ -98,15 +104,16 @@ const AlertDashboard = () => {
       try {
         const response = await axios.put(
           `http://localhost:3000/api/alerts/acknowledge/${id}`,
-          {}
+          { acknowledged: true }
         );
-        setAlerts(alerts.map((alert) => (alert._id === id ? { ...alert, acknowledged: true } : alert)));
+        console.log('Acknowledge response:', response.data);
+        setAlerts(alerts.map((alert) => (alert._id === id ? { ...alert, acknowledged: true, acknowledgedAt: new Date().toISOString() } : alert)));
         setSuccessMessage('Alert acknowledged successfully');
         setTimeout(() => setSuccessMessage(''), 3000);
         break;
       } catch (err) {
         if (attempt === maxRetries) {
-          setError(`Failed to acknowledge alert after ${maxRetries} attempts: ${err.message}`);
+          setError(`Failed to acknowledge alert after ${maxRetries} attempts: ${err.response?.data?.message || err.message}`);
         }
         attempt++;
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -116,23 +123,49 @@ const AlertDashboard = () => {
   };
 
   const resolveAlert = async (id) => {
+    if (!/^[0-9a-fA-F]{24}$/.test(id)) {
+      setError('Invalid alert ID format');
+      return;
+    }
+
+    setResolving(id);
     setError('');
     setSuccessMessage('');
 
-    try {
-      const response = await axios.put(
-        `http://localhost:3000/api/alerts/${id}`,
-        {}
-      );
-      setAlerts(alerts.map((alert) => (alert._id === id ? response.data : alert)));
-      setSuccessMessage('Alert resolved successfully');
-      setTimeout(() => setSuccessMessage(''), 3000);
-    } catch (err) {
-      setError('Failed to resolve alert: ' + err.message);
+    const maxRetries = 3;
+    let attempt = 1;
+
+    while (attempt <= maxRetries) {
+      try {
+        const response = await axios.put(
+          `http://localhost:3000/api/alerts/resolve/${id}`,
+          {
+            status: 'resolved',
+            resolvedAt: new Date().toISOString()
+          }
+        );
+        console.log('Resolve response:', response.data);
+        setAlerts(alerts.map((alert) => (alert._id === id ? { ...alert, ...response.data } : alert)));
+        setSuccessMessage('Alert resolved successfully');
+        setTimeout(() => setSuccessMessage(''), 3000);
+        break;
+      } catch (err) {
+        if (attempt === maxRetries) {
+          setError(`Failed to resolve alert after ${maxRetries} attempts: ${err.response?.data?.message || err.message}`);
+        }
+        attempt++;
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
     }
+    setResolving(null);
   };
 
   const deleteAlert = async (id) => {
+    if (!/^[0-9a-fA-F]{24}$/.test(id)) {
+      setError('Invalid alert ID format');
+      return;
+    }
+
     setError('');
     setSuccessMessage('');
 
@@ -147,25 +180,25 @@ const AlertDashboard = () => {
       setSuccessMessage('Alert deleted successfully');
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {
-      setError('Failed to delete alert: ' + err.message);
+      setError(`Failed to delete alert: ${err.response?.data?.message || err.message}`);
     }
   };
 
+  useEffect(() => {
+    fetchAlerts();
+  }, [siteId, filter, startDate, endDate]);
 
-useEffect(() => {
-  const filtered = alerts.filter(alert => {
-    const query = searchQuery?.toLowerCase() || "";
-    return (
-      alert.siteId?.toLowerCase().includes(query) ||
-      alert.type?.toLowerCase().includes(query) ||
-      alert.message?.toLowerCase().includes(query)
-    );
-  });
-
-  setFilteredAlerts(filtered); // assuming you're maintaining a filtered state
-}, [alerts, searchQuery]);
-
-    
+  useEffect(() => {
+    const filtered = alerts.filter(alert => {
+      const query = searchQuery?.toLowerCase() || '';
+      return (
+        (alert.site_id || '').toLowerCase().includes(query) ||
+        (alert.type || '').toLowerCase().includes(query) ||
+        (alert.message || '').toLowerCase().includes(query)
+      );
+    });
+    setFilteredAlerts(filtered);
+  }, [alerts, searchQuery]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -343,15 +376,15 @@ useEffect(() => {
                     filteredAlerts.map((alert) => (
                       <tr key={alert._id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {alert.siteId}
+                          {alert.site_id || 'N/A'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
-                            {alert.type}
+                            {alert.type || 'N/A'}
                           </span>
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
-                          {alert.message}
+                          {alert.message || 'No message'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           <span className={`px-2 py-1 inline-flex items-center text-xs leading-5 font-semibold rounded-full ${
@@ -366,7 +399,7 @@ useEffect(() => {
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {new Date(alert.createdAt).toLocaleString()}
+                          {alert.createdAt ? new Date(alert.createdAt).toLocaleString() : 'N/A'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {alert.resolvedAt ? new Date(alert.resolvedAt).toLocaleString() : '-'}
@@ -400,8 +433,11 @@ useEffect(() => {
                                 )}
                                 <button
                                   onClick={() => resolveAlert(alert._id)}
-                                  className="text-green-600 hover:text-green-900"
+                                  className={`text-green-600 hover:text-green-900 ${
+                                    resolving === alert._id ? 'opacity-50 cursor-not-allowed' : ''
+                                  }`}
                                   title="Resolve"
+                                  disabled={resolving === alert._id}
                                 >
                                   <FiCheckCircle className="h-5 w-5" />
                                 </button>
@@ -435,4 +471,4 @@ useEffect(() => {
   );
 };
 
-export default AlertDashboard;
+export default DashNotifications;
