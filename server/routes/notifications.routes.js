@@ -1,26 +1,23 @@
 const express = require('express');
 const Notification = require('../models/Notification');
 const router = express.Router();
-const { checkAndCreateNotifications } = require('../controllers/notificationsController');
+const { checkAndCreateNotifications } = require('../notificationRules/checkMaintenanceNotifications');
 
-// ========== Check Maintenance and Create Notifications ==========
-// Trigger notification creation based on maintenance checks
-router.get('/check-maintenance', async (req, res) => {
+// Check and Create Notifications
+router.post('/check', async (req, res) => {
   try {
     await checkAndCreateNotifications();
     res.status(200).json({ message: 'Checked and created notifications successfully' });
   } catch (error) {
-    console.error(error); // Log the error for debugging
-    res.status(500).json({ message: 'Error running maintenance check', error: error.message });
+    console.error(error);
+    res.status(500).json({ message: 'Error running notification check', error: error.message });
   }
 });
 
-// ========== Get All Notifications ==========
-// Fetch all notifications with optional filters for read/unread and type, with pagination
-router.get('/notifications', async (req, res) => {
+// Get All Notifications
+router.get('/', async (req, res) => {
   try {
-    const { read, type, email, page = 1, limit = 10 } = req.query; // Pagination with default values
-
+    const { read, type, email, page = 1, limit = 10 } = req.query;
     const filter = {};
 
     if (read) {
@@ -35,14 +32,16 @@ router.get('/notifications', async (req, res) => {
     }
 
     if (email) {
-      filter.email = email;
+      filter.emailTo = email;
     }
 
     const notifications = await Notification.find(filter)
-      .skip((page - 1) * limit) // Pagination
+      .populate('equipmentId', 'name')
+      .populate('maintenanceId', 'description performedBy status')
+      .skip((page - 1) * limit)
       .limit(parseInt(limit));
 
-    const totalNotifications = await Notification.countDocuments(filter); // Get the total count for pagination info
+    const totalNotifications = await Notification.countDocuments(filter);
 
     res.status(200).json({
       notifications,
@@ -51,14 +50,13 @@ router.get('/notifications', async (req, res) => {
       totalPages: Math.ceil(totalNotifications / limit),
     });
   } catch (error) {
-    console.error(error); // Log the error for debugging
+    console.error(error);
     res.status(500).json({ message: 'Error fetching notifications', error: error.message });
   }
 });
 
-// ========== Mark Notification as Read ==========
-// Update the notification's read status
-router.put('/notifications/:id/read', async (req, res) => {
+// Mark Notification as Read
+router.put('/:id/read', async (req, res) => {
   try {
     const notificationId = req.params.id;
     const notification = await Notification.findById(notificationId);
@@ -73,14 +71,13 @@ router.put('/notifications/:id/read', async (req, res) => {
 
     res.status(200).json({ message: 'Notification marked as read', notification });
   } catch (error) {
-    console.error(error); // Log the error for debugging
+    console.error(error);
     res.status(500).json({ message: 'Error marking notification as read', error: error.message });
   }
 });
 
-// ========== Delete Notification ==========
-// Delete a specific notification by ID
-router.delete('/notifications/:id', async (req, res) => {
+// Delete Notification
+router.delete('/:id', async (req, res) => {
   try {
     const notificationId = req.params.id;
     const notification = await Notification.findByIdAndDelete(notificationId);
@@ -91,7 +88,7 @@ router.delete('/notifications/:id', async (req, res) => {
 
     res.status(200).json({ message: 'Notification deleted successfully' });
   } catch (error) {
-    console.error(error); // Log the error for debugging
+    console.error(error);
     res.status(500).json({ message: 'Error deleting notification', error: error.message });
   }
 });

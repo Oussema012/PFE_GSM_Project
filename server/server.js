@@ -2,17 +2,17 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 require('./config/mongoose'); // MongoDB connection setup
-const { checkAndCreateNotifications } = require('./controllers/notificationsController');
-const { sendEmailNotification } = require('./email');  // Ensure correct file path
+const { checkAndCreateNotifications, checkMaintenanceNotifications } = require('./notificationRules/checkMaintenanceNotifications');
+const { sendEmailNotification } = require('./email');
+const cron = require('node-cron');
 
 const app = express();
 
 // ========== Middleware ==========
-app.use(cors());            // Enable Cross-Origin Resource Sharing (CORS)
-app.use(express.json());    // Parse incoming JSON requests
+app.use(cors());
+app.use(express.json());
 
 // ========== Route Imports ==========
-const authRoutes = require('./routes/auth.routes');
 const userRoutes = require('./routes/user.routes');
 const siteRoutes = require('./routes/Site.routes');
 const equipmentRoutes = require('./routes/Equipment.routes');
@@ -23,7 +23,7 @@ const maintenanceRoutes = require('./routes/maintenance.routes');
 const mapRoutes = require('./routes/map.routes');
 const notificationRoutes = require('./routes/notifications.routes');
 
-// ========== Initial Setup ==========
+// ========== Initial Maintenance Check on Startup ==========
 try {
   checkAndCreateNotifications();
 } catch (error) {
@@ -31,7 +31,6 @@ try {
 }
 
 // ========== API Routes ==========
-app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/sites', siteRoutes);
 app.use('/api/equipment', equipmentRoutes);
@@ -42,7 +41,7 @@ app.use('/api/maintenance', maintenanceRoutes);
 app.use('/api/maps', mapRoutes);
 app.use('/api/notifications', notificationRoutes);
 
-// ========== Notification Handling ==========
+// ========== Manual Email Notification Route ==========
 app.post('/send-notification', async (req, res) => {
   const { email, message } = req.body;
   try {
@@ -106,5 +105,5 @@ const shutdown = () => {
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
-// ========== Interval for Maintenance Check ==========
-setInterval(checkAndCreateNotifications, 86400000);
+// ========== Daily Maintenance Notification Check at 9:00 AM ==========
+

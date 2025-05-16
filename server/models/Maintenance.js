@@ -13,9 +13,12 @@ const maintenanceSchema = new mongoose.Schema(
       trim: true,
       minlength: [5, 'Description must be at least 5 characters long'],
     },
+    scheduledDate: {
+      type: Date,
+      required: [true, 'Scheduled date is required'],
+    },
     performedAt: {
       type: Date,
-      default: Date.now,
     },
     performedBy: {
       type: String,
@@ -35,7 +38,6 @@ const maintenanceSchema = new mongoose.Schema(
   {
     timestamps: true, // Adds createdAt and updatedAt automatically
   }
-  
 );
 
 module.exports = mongoose.model('Maintenance', maintenanceSchema);

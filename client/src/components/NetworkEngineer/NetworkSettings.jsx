@@ -6,10 +6,11 @@ import {
   FiTrash2,
   FiCheckCircle,
   FiAlertCircle,
-  FiClock
+  FiClock,
 } from 'react-icons/fi';
 import { FaWrench } from 'react-icons/fa';
 import moment from 'moment';
+import 'moment-timezone';
 
 // Set axios base URL
 axios.defaults.baseURL = 'http://localhost:3000';
@@ -29,7 +30,7 @@ const NetworkSettings = () => {
     performedBy: '',
     status: 'pending',
     scheduledDate: moment().format('YYYY-MM-DD'),
-    scheduledTime: '09:00'
+    scheduledTime: '', // Allow any time
   });
 
   // Fetch all maintenance records
@@ -55,18 +56,49 @@ const NetworkSettings = () => {
     setError('');
     setSuccessMessage('');
     try {
+      // Validate required fields
       if (!formData.equipmentId || !formData.description || !formData.performedBy) {
         setError('Equipment ID, description, and performed by are required.');
         return;
       }
 
-      const scheduledDateTime = moment(`${formData.scheduledDate} ${formData.scheduledTime}`, 'YYYY-MM-DD HH:mm').format();
+      // Validate equipmentId format
+      if (!/^[0-9a-fA-F]{24}$/.test(formData.equipmentId)) {
+        setError('Invalid Equipment ID format');
+        return;
+      }
+
+      // Validate performedBy
+      if (formData.performedBy.length < 2 || !/^[a-zA-Z\s]+$/.test(formData.performedBy)) {
+        setError('Technician name must be at least 2 characters and contain only letters and spaces');
+        return;
+      }
+
+      // Validate and format scheduledDate
+      const scheduledDate = moment(formData.scheduledDate, 'YYYY-MM-DD').format('YYYY-MM-DD');
+      if (!moment(scheduledDate, 'YYYY-MM-DD', true).isValid()) {
+        setError('Scheduled date must be in YYYY-MM-DD format');
+        return;
+      }
+
+      // Validate and format scheduledTime
+      let scheduledTime = '';
+      if (formData.scheduledTime) {
+        const time = moment(formData.scheduledTime, 'HH:mm');
+        if (!time.isValid()) {
+          setError('Scheduled time must be in HH:mm format (e.g., 17:00 for 5:00 PM, 01:00 for 1:00 AM)');
+          return;
+        }
+        scheduledTime = time.format('HH:mm:ss');
+      }
 
       const payload = {
         ...formData,
-        scheduledDate: scheduledDateTime,
+        scheduledDate,
+        scheduledTime: scheduledTime || undefined,
       };
 
+      console.log('Sending payload:', payload); // Debug
       const response = await axios.post('/api/maintenance', payload);
       setMaintenances([...maintenances, response.data]);
       setSuccessMessage('Maintenance added successfully');
@@ -84,17 +116,44 @@ const NetworkSettings = () => {
   const updateMaintenance = async () => {
     setError('');
     setSuccessMessage('');
+
+    // Validate at least one field is provided
+    if (!formData.description && !formData.performedBy && !formData.status && !formData.scheduledDate) {
+      setError('At least one field (description, performed by, status, or date) is required for update.');
+      return;
+    }
+
+    // Validate performedBy if provided
+    if (formData.performedBy && (formData.performedBy.length < 2 || !/^[a-zA-Z\s]+$/.test(formData.performedBy))) {
+      setError('Technician name must be at least 2 characters and contain only letters and spaces');
+      return;
+    }
+
     try {
-      if (!formData.description && !formData.performedBy && !formData.status) {
-        setError('At least one field (description, performed by, or status) is required for update.');
-        return;
+      const updatedData = { ...formData };
+
+      // Validate and format scheduledDate and scheduledTime if provided
+      if (formData.scheduledDate) {
+        const scheduledDate = moment(formData.scheduledDate, 'YYYY-MM-DD').format('YYYY-MM-DD');
+        if (!moment(scheduledDate, 'YYYY-MM-DD', true).isValid()) {
+          setError('Scheduled date must be in YYYY-MM-DD format');
+          return;
+        }
+        updatedData.scheduledDate = scheduledDate;
+
+        if (formData.scheduledTime) {
+          const time = moment(formData.scheduledTime, 'HH:mm');
+          if (!time.isValid()) {
+            setError('Scheduled time must be in HH:mm format');
+            return;
+          }
+          updatedData.scheduledTime = time.format('HH:mm:ss');
+        } else {
+          updatedData.scheduledTime = undefined;
+        }
       }
 
-      let updatedData = { ...formData };
-      if (formData.scheduledDate && formData.scheduledTime) {
-         updatedData.scheduledDate = moment(`${formData.scheduledDate} ${formData.scheduledTime}`, 'YYYY-MM-DD HH:mm').format();
-      }
-
+      console.log('Updating payload:', updatedData); // Debug
       const response = await axios.put(`/api/maintenance/${showEditModal}`, updatedData);
       setMaintenances(maintenances.map(m => (m._id === showEditModal ? response.data : m)));
       setSuccessMessage('Maintenance updated successfully');
@@ -132,7 +191,7 @@ const NetworkSettings = () => {
       performedBy: '',
       status: 'pending',
       scheduledDate: moment().format('YYYY-MM-DD'),
-      scheduledTime: '09:00',
+      scheduledTime: '',
     });
   };
 
@@ -144,14 +203,14 @@ const NetworkSettings = () => {
 
   // Open edit modal with maintenance data
   const openEditModal = (maintenance) => {
-    const scheduledMoment = moment(maintenance.scheduledDate);
+    const performedAt = maintenance.performedAt ? moment(maintenance.performedAt).tz('Europe/Paris') : moment(maintenance.scheduledDate).tz('Europe/Paris');
     setFormData({
-      equipmentId: maintenance.equipmentId,
+      equipmentId: maintenance.equipmentId?._id || maintenance.equipmentId,
       description: maintenance.description,
       performedBy: maintenance.performedBy,
       status: maintenance.status,
-      scheduledDate: scheduledMoment.format('YYYY-MM-DD'),
-      scheduledTime: scheduledMoment.format('HH:mm')
+      scheduledDate: performedAt.format('YYYY-MM-DD'),
+      scheduledTime: performedAt.isValid() ? performedAt.format('HH:mm') : '',
     });
     setShowEditModal(maintenance._id);
   };
@@ -164,7 +223,7 @@ const NetworkSettings = () => {
   // Render maintenance cards
   const renderCards = () => {
     const sortedMaintenances = [...maintenances].sort((a, b) => {
-      return moment(a.scheduledDate).diff(moment(b.scheduledDate));
+      return moment(a.performedAt || a.scheduledDate).diff(moment(b.performedAt || b.scheduledDate));
     });
 
     return (
@@ -179,14 +238,20 @@ const NetworkSettings = () => {
             <div className="flex justify-between items-start">
               <div>
                 <h4 className="font-semibold text-gray-900">{maintenance.description}</h4>
-                <p className="text-sm text-gray-600">Equipment: {maintenance.equipmentId}</p>
-                <p className="text-sm text-gray-600">Technician: {maintenance.performedBy}</p>
+                <p className="text-sm text-gray-600">
+                  Equipment: {maintenance.equipmentId?.name || 'Unknown'}
+                </p>
+                <p className="text-sm text-gray-600">Technician: {maintenance.performedBy || 'N/A'}</p>
                 <p className="text-sm text-gray-600 flex items-center">
                   <FiClock className="mr-1" />
-                  {moment(maintenance.scheduledDate).format('MMM D, YYYY h:mm A')}
+                  {maintenance.performedAt
+                    ? moment(maintenance.performedAt).tz('Europe/Paris').format('MMM D, YYYY h:mm A')
+                    : moment(maintenance.scheduledDate).tz('Europe/Paris').format('MMM D, YYYY')}
                 </p>
                 <p className="text-sm font-medium mt-1">
-                  Status: {maintenance.status.charAt(0).toUpperCase() + maintenance.status.slice(1)}
+                  Status: {maintenance.status
+                    ? maintenance.status.charAt(0).toUpperCase() + maintenance.status.slice(1)
+                    : 'Unknown'}
                 </p>
               </div>
               <div className="flex space-x-2">
@@ -340,6 +405,7 @@ const NetworkSettings = () => {
                       value={formData.scheduledTime}
                       onChange={handleInputChange}
                       className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                      step="60"
                     />
                   </div>
                 </div>
@@ -353,6 +419,7 @@ const NetworkSettings = () => {
                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                   >
                     <option value="pending">Pending</option>
+                    <option value="in progress">In Progress</option>
                     <option value="completed">Completed</option>
                   </select>
                 </div>
@@ -394,7 +461,7 @@ const NetworkSettings = () => {
                     onChange={handleInputChange}
                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                     placeholder="Enter equipment ID"
-                    disabled
+                    readOnly
                   />
                 </div>
                 <div>
@@ -438,6 +505,7 @@ const NetworkSettings = () => {
                       value={formData.scheduledTime}
                       onChange={handleInputChange}
                       className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                      step="60"
                     />
                   </div>
                 </div>
@@ -450,7 +518,7 @@ const NetworkSettings = () => {
                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                   >
                     <option value="pending">Pending</option>
-                    <option value="overdue">Overdue</option>
+                    <option value="in progress">In Progress</option>
                     <option value="completed">Completed</option>
                   </select>
                 </div>
