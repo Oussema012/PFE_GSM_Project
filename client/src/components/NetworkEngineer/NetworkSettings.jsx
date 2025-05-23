@@ -17,6 +17,7 @@ axios.defaults.baseURL = 'http://localhost:3000';
 
 const NetworkSettings = () => {
   const [maintenances, setMaintenances] = useState([]);
+  const [technicians, setTechnicians] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -27,10 +28,10 @@ const NetworkSettings = () => {
   const [formData, setFormData] = useState({
     equipmentId: '',
     description: '',
-    performedBy: '',
+    performedBy: '', // Will store technician _id
     status: 'pending',
     scheduledDate: moment().format('YYYY-MM-DD'),
-    scheduledTime: '', // Allow any time
+    scheduledTime: '',
   });
 
   // Fetch all maintenance records
@@ -51,6 +52,20 @@ const NetworkSettings = () => {
     }
   };
 
+  // Fetch all technicians
+  const fetchTechnicians = async () => {
+    try {
+      const response = await axios.get('/api/technicians');
+      if (!response.data.success || !Array.isArray(response.data.data)) {
+        throw new Error('Technician data is invalid');
+      }
+      setTechnicians(response.data.data);
+    } catch (err) {
+      console.error('Fetch technicians error:', err.response?.data || err.message);
+      setError('Failed to fetch technicians: ' + (err.response?.data?.message || err.message));
+    }
+  };
+
   // Add new maintenance
   const addMaintenance = async () => {
     setError('');
@@ -58,7 +73,7 @@ const NetworkSettings = () => {
     try {
       // Validate required fields
       if (!formData.equipmentId || !formData.description || !formData.performedBy) {
-        setError('Equipment ID, description, and performed by are required.');
+        setError('Equipment ID, description, and technician are required.');
         return;
       }
 
@@ -68,9 +83,9 @@ const NetworkSettings = () => {
         return;
       }
 
-      // Validate performedBy
-      if (formData.performedBy.length < 2 || !/^[a-zA-Z\s]+$/.test(formData.performedBy)) {
-        setError('Technician name must be at least 2 characters and contain only letters and spaces');
+      // Validate performedBy (must be a valid ObjectId)
+      if (!/^[0-9a-fA-F]{24}$/.test(formData.performedBy)) {
+        setError('Please select a valid technician');
         return;
       }
 
@@ -98,7 +113,7 @@ const NetworkSettings = () => {
         scheduledTime: scheduledTime || undefined,
       };
 
-      console.log('Sending payload:', payload); // Debug
+      console.log('Sending payload:', payload);
       const response = await axios.post('/api/maintenance', payload);
       setMaintenances([...maintenances, response.data]);
       setSuccessMessage('Maintenance added successfully');
@@ -119,13 +134,13 @@ const NetworkSettings = () => {
 
     // Validate at least one field is provided
     if (!formData.description && !formData.performedBy && !formData.status && !formData.scheduledDate) {
-      setError('At least one field (description, performed by, status, or date) is required for update.');
+      setError('At least one field (description, technician, status, or date) is required for update.');
       return;
     }
 
     // Validate performedBy if provided
-    if (formData.performedBy && (formData.performedBy.length < 2 || !/^[a-zA-Z\s]+$/.test(formData.performedBy))) {
-      setError('Technician name must be at least 2 characters and contain only letters and spaces');
+    if (formData.performedBy && !/^[0-9a-fA-F]{24}$/.test(formData.performedBy)) {
+      setError('Please select a valid technician');
       return;
     }
 
@@ -153,7 +168,7 @@ const NetworkSettings = () => {
         }
       }
 
-      console.log('Updating payload:', updatedData); // Debug
+      console.log('Updating payload:', updatedData);
       const response = await axios.put(`/api/maintenance/${showEditModal}`, updatedData);
       setMaintenances(maintenances.map(m => (m._id === showEditModal ? response.data : m)));
       setSuccessMessage('Maintenance updated successfully');
@@ -207,7 +222,7 @@ const NetworkSettings = () => {
     setFormData({
       equipmentId: maintenance.equipmentId?._id || maintenance.equipmentId,
       description: maintenance.description,
-      performedBy: maintenance.performedBy,
+      performedBy: maintenance.performedBy?._id || maintenance.performedBy || '',
       status: maintenance.status,
       scheduledDate: performedAt.format('YYYY-MM-DD'),
       scheduledTime: performedAt.isValid() ? performedAt.format('HH:mm') : '',
@@ -215,9 +230,10 @@ const NetworkSettings = () => {
     setShowEditModal(maintenance._id);
   };
 
-  // Fetch maintenances on component mount
+  // Fetch maintenances and technicians on component mount
   useEffect(() => {
     fetchMaintenances();
+    fetchTechnicians();
   }, []);
 
   // Render maintenance cards
@@ -232,7 +248,11 @@ const NetworkSettings = () => {
           <div
             key={maintenance._id}
             className={`p-4 rounded-lg shadow-md border-l-4 ${
-              maintenance.status === 'completed' ? 'border-green-500 bg-green-50' : 'border-red-500 bg-red-50'
+              maintenance.status === 'completed'
+                ? 'border-green-500 bg-green-50'
+                : maintenance.status === 'in progress'
+                ? 'border-orange-500 bg-orange-50'
+                : 'border-red-500 bg-red-50'
             }`}
           >
             <div className="flex justify-between items-start">
@@ -241,7 +261,9 @@ const NetworkSettings = () => {
                 <p className="text-sm text-gray-600">
                   Equipment: {maintenance.equipmentId?.name || 'Unknown'}
                 </p>
-                <p className="text-sm text-gray-600">Technician: {maintenance.performedBy || 'N/A'}</p>
+                <p className="text-sm text-gray-600">
+                  Technician: {maintenance.performedBy?.name || 'N/A'}
+                </p>
                 <p className="text-sm text-gray-600 flex items-center">
                   <FiClock className="mr-1" />
                   {maintenance.performedAt
@@ -374,15 +396,20 @@ const NetworkSettings = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Performed By</label>
-                  <input
-                    type="text"
+                  <label className="block text-sm font-medium text-gray-700">Technician</label>
+                  <select
                     name="performedBy"
                     value={formData.performedBy}
                     onChange={handleInputChange}
                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                    placeholder="Enter technician name"
-                  />
+                  >
+                    <option value="">Select a technician</option>
+                    {technicians.map(tech => (
+                      <option key={tech._id} value={tech._id}>
+                        {tech.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -476,15 +503,20 @@ const NetworkSettings = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Performed By</label>
-                  <input
-                    type="text"
+                  <label className="block text-sm font-medium text-gray-700">Technician</label>
+                  <select
                     name="performedBy"
                     value={formData.performedBy}
                     onChange={handleInputChange}
                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                    placeholder="Enter technician name"
-                  />
+                  >
+                    <option value="">Select a technician</option>
+                    {technicians.map(tech => (
+                      <option key={tech._id} value={tech._id}>
+                        {tech.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -541,6 +573,108 @@ const NetworkSettings = () => {
           </div>
         )}
 
+        {/* Delete Confirmation Modal */}
+        {showEditModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 animate-fade-in">
+            <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full transform transition-all animate-scale-in">
+              <div className="flex items-center mb-4">
+                <FiEdit className="h-6 w-6 text-indigo-600 mr-2" />
+                <h3 className="text-lg font-semibold text-gray-900">Edit Maintenance</h3>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Equipment ID</label>
+                  <input
+                    type="text"
+                    name="equipmentId"
+                    value={formData.equipmentId}
+                    onChange={handleInputChange}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                    placeholder="Enter equipment ID"
+                    readOnly
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Description</label>
+                  <textarea
+                    name="description"
+                    value={formData.description}
+                    onChange={handleInputChange}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                    placeholder="Enter maintenance description"
+                    rows="3"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Technician</label>
+                  <select
+                    name="performedBy"
+                    value={formData.performedBy}
+                    onChange={handleInputChange}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                  >
+                    <option value="">Select a technician</option>
+                    {technicians.map(tech => (
+                      <option key={tech._id} value={tech._id}>
+                        {tech.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Date</label>
+                    <input
+                      type="date"
+                      name="scheduledDate"
+                      value={formData.scheduledDate}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Time</label>
+                    <input
+                      type="time"
+                      name="scheduledTime"
+                      value={formData.scheduledTime}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                      step="60"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Status</label>
+                  <select
+                    name="status"
+                    value={formData.status}
+                    onChange={handleInputChange}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                  >
+                    <option value="pending">Pending</option>
+                    <option value="in progress">In Progress</option>
+                    <option value="completed">Completed</option>
+                  </select>
+                </div>
+              </div>
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowEditModal(null)}
+                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 text-sm"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={updateMaintenance}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                >
+                  Update
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {/* Delete Confirmation Modal */}
         {showDeleteModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 animate-fade-in">

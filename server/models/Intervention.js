@@ -9,7 +9,12 @@ const interventionSchema = new Schema({
     start: { type: String }, // e.g. "09:00"
     end: { type: String }    // e.g. "11:00"
   },
-  technician: { type: String }, // Or use an array for team
+  technician: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'User',
+  required: true
+},
+ // Or use an array for team
   team: [{ type: String }],     // List of team members (usernames or IDs)
   priority: {
     type: String,

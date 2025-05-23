@@ -24,6 +24,7 @@ const apiFetch = async (url, options = {}) => {
     headers: {
       'Content-Type': 'application/json',
       ...options.headers,
+      
     },
   });
   if (!response.ok) {
@@ -108,6 +109,7 @@ const NetworkTopology = () => {
     } catch (error) {
       setError(error.message);
     }
+    
   };
 
   // Schedule intervention

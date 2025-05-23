@@ -2,6 +2,7 @@ const Equipment = require('../models/Equipment');
 
 // Add new equipment to a site
 const addEquipment = async (req, res) => {
+  console.log("REQ.BODY:", req.body);
     try {
       const { siteId, name, type, status } = req.body;
   
@@ -63,10 +64,34 @@ const deleteEquipment = async (req, res) => {
     res.status(500).json({ message: 'Error deleting equipment', error: err });
   }
 };
+// Return equipment options (e.g., types of equipment)
+const fallbackEquipmentOptions = (req, res) => {
+  console.log('fallbackEquipmentOptions called');
+  const options = [
+    { equipment_id: 'eq001', name: 'Antenna A', type: 'Antenna' },
+    { equipment_id: 'eq002', name: 'Generator B', type: 'Generator' },
+    { equipment_id: 'eq003', name: 'Router C', type: 'Router' },
+  ];
+  console.log('Options sent:', options);
+  res.status(200).json(options);
+};
+// Return equipment options (static for now)
+const getEquipmentOptions = (req, res) => {
+  const options = [
+    { label: 'Router', value: 'router' },
+    { label: 'Switch', value: 'switch' },
+    { label: 'Firewall', value: 'firewall' },
+    { label: 'Server', value: 'server' },
+    { label: 'Access Point', value: 'access_point' }
+  ];
+  res.status(200).json(options);
+};
 
 module.exports = {
   addEquipment,
   getEquipmentBySite,
   updateEquipment,
-  deleteEquipment
+  deleteEquipment,
+  fallbackEquipmentOptions,
+  getEquipmentOptions 
 };

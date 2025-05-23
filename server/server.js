@@ -9,19 +9,24 @@ const cron = require('node-cron');
 const app = express();
 
 // ========== Middleware ==========
-app.use(cors());
+app.use(cors({
+  origin: "http://localhost:5173",
+  credentials: true,
+}));
 app.use(express.json());
 
 // ========== Route Imports ==========
-const userRoutes = require('./routes/user.routes');
+require('./routes/user.routes')(app);
 const siteRoutes = require('./routes/Site.routes');
 const equipmentRoutes = require('./routes/Equipment.routes');
 const alertRoutes = require('./routes/Alert.routes');
+const authRoutes = require('./routes/Authentification.routes');
 const interventionRoutes = require('./routes/Intervention.routes');
 const reportRoutes = require('./routes/report.routes');
 const maintenanceRoutes = require('./routes/maintenance.routes');
 const mapRoutes = require('./routes/map.routes');
 const notificationRoutes = require('./routes/notifications.routes');
+const userRoutes = require('./routes/user.routes'); // ✅ Correct router import
 
 // ========== Initial Maintenance Check on Startup ==========
 try {
@@ -31,8 +36,9 @@ try {
 }
 
 // ========== API Routes ==========
-app.use('/api/users', userRoutes);
+
 app.use('/api/sites', siteRoutes);
+app.use('/api/auth', authRoutes);
 app.use('/api/equipment', equipmentRoutes);
 app.use('/api/alerts', alertRoutes);
 app.use('/api/interventions', interventionRoutes);
@@ -40,6 +46,7 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/maintenance', maintenanceRoutes);
 app.use('/api/maps', mapRoutes);
 app.use('/api/notifications', notificationRoutes);
+
 
 // ========== Manual Email Notification Route ==========
 app.post('/send-notification', async (req, res) => {
@@ -77,15 +84,9 @@ app.get('/', (req, res) => {
   res.send('🚀 GSM Monitoring API is running');
 });
 
-// ========== 404 & Error Handling ==========
-app.use((req, res, next) => {
-  res.status(404).json({ message: '❌ Endpoint not found' });
-});
 
-app.use((err, req, res, next) => {
-  console.error('💥 Internal Server Error:', err);
-  res.status(500).json({ message: '❌ Internal server error. Please try again later.' });
-});
+
+
 
 // ========== Start Server ==========
 const PORT = process.env.PORT || 3000;
@@ -93,6 +94,16 @@ const server = app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
 
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  const statusCode = err.statusCode || 500;
+  const message = err.message || "Internal server error";
+  res.status(statusCode).json({
+    success: false,
+    statusCode,
+    message
+  });
+});
 // ========== Graceful Shutdown ==========
 const shutdown = () => {
   console.log('Shutting down gracefully...');
@@ -101,6 +112,7 @@ const shutdown = () => {
     process.exit(0);
   });
 };
+
 
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);

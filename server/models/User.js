@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-
+const bcrypt = require("bcrypt");
 const userSchema = new mongoose.Schema(
   {
     name: {
@@ -11,23 +11,22 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: [true, "Email is required"],
       unique: true,
+      lowercase: true,
       trim: true,
-      lowercase: true, 
     },
     password: {
       type: String,
       required: [true, "Password is required"],
       minlength: [6, "Password must be at least 6 characters"],
     },
+    profilePicture: {
+      type: String,
+      default: 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_960_720.png',
+    },
     role: {
       type: String,
-      enum: ["admin", "engineer", "technician", "viewer"],
+      enum: ["admin", "engineer", "technician"],
       required: [true, "Role is required"],
-    },
-    department: {
-      type: String,
-      default: null,
-      trim: true,
     },
     isActive: {
       type: Boolean,
@@ -39,17 +38,20 @@ const userSchema = new mongoose.Schema(
         ref: "Site",
       },
     ],
-  },
-  {
-    timestamps: true,
-    toJSON: {
-      // Exclude password by default in JSON responses
-      transform(doc, ret) {
-        delete ret.password;
-        return ret;
-      },
+    failedLoginAttempts: {
+      type: Number,
+      default: 0,
     },
-  }
+    lockUntil: {
+      type: Number,
+    },
+  },
+  { timestamps: true }
 );
+
+
+userSchema.virtual("confirmPassword")
+    .get(()=>this._confirmPassword)
+    .set(value=>this._confirmPassword=value)
 
 module.exports = mongoose.model("User", userSchema);

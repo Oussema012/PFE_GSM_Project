@@ -13,6 +13,16 @@ exports.getSites = async (req, res) => {
   }
 };
 
+exports.getAllSites = async (req, res) => {
+  try {
+    const sites = await Site.find().select('site_reference name location _id').lean();
+    res.status(200).json(sites);
+  } catch (error) {
+    console.error('Error fetching sites:', error);
+    res.status(500).json({ message: 'Error fetching sites', error: error.message });
+  }
+};
+
 // Controller to fetch a specific site by ID
 exports.getSiteById = async (req, res) => {
   try {

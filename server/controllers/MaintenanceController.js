@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const Maintenance = require('../models/Maintenance');
+const User = require('../models/User');
 
 // Add a maintenance record
 const addMaintenance = async (req, res) => {
@@ -20,10 +21,16 @@ const addMaintenance = async (req, res) => {
       });
     }
 
-    // Validate performedBy
-    if (performedBy.length < 2 || !/^[a-zA-Z\s]+$/.test(performedBy)) {
+    // Validate performedBy as ObjectId and technician
+    if (!mongoose.Types.ObjectId.isValid(performedBy)) {
       return res.status(400).json({
-        message: 'Technician name must be at least 2 characters and contain only letters and spaces',
+        message: 'Invalid technician ID format',
+      });
+    }
+    const technician = await User.findOne({ _id: performedBy, role: 'technician' });
+    if (!technician) {
+      return res.status(400).json({
+        message: 'Technician not found or not a technician',
       });
     }
 
@@ -68,7 +75,9 @@ const addMaintenance = async (req, res) => {
     });
 
     await newMaintenance.save();
-    const populatedMaintenance = await Maintenance.findById(newMaintenance._id).populate('equipmentId', 'name');
+    const populatedMaintenance = await Maintenance.findById(newMaintenance._id)
+      .populate('equipmentId', 'name')
+      .populate('performedBy', 'name');
     res.status(201).json(populatedMaintenance);
   } catch (err) {
     console.error('Add maintenance error:', err);
@@ -90,6 +99,7 @@ const getMaintenanceByEquipment = async (req, res) => {
     }
     const maintenance = await Maintenance.find({ equipmentId })
       .populate('equipmentId', 'name')
+      .populate('performedBy', 'name')
       .sort({ performedAt: -1 });
 
     res.status(200).json(maintenance);
@@ -107,6 +117,7 @@ const getAllMaintenances = async (req, res) => {
   try {
     const allMaintenances = await Maintenance.find()
       .populate('equipmentId', 'name')
+      .populate('performedBy', 'name')
       .sort({ performedAt: -1 });
 
     res.status(200).json(allMaintenances);
@@ -156,9 +167,15 @@ const updateMaintenance = async (req, res) => {
 
     // Validate and set performedBy
     if (performedBy) {
-      if (performedBy.length < 2 || !/^[a-zA-Z\s]+$/.test(performedBy)) {
+      if (!mongoose.Types.ObjectId.isValid(performedBy)) {
         return res.status(400).json({
-          message: 'Technician name must be at least 2 characters and contain only letters and spaces',
+          message: 'Invalid technician ID format',
+        });
+      }
+      const technician = await User.findOne({ _id: performedBy, role: 'technician' });
+      if (!technician) {
+        return res.status(400).json({
+          message: 'Technician not found or not a technician',
         });
       }
       updatedFields.performedBy = performedBy;
@@ -216,7 +233,9 @@ const updateMaintenance = async (req, res) => {
       return res.status(404).json({ message: 'Maintenance record not found' });
     }
 
-    const populatedUpdated = await Maintenance.findById(id).populate('equipmentId', 'name');
+    const populatedUpdated = await Maintenance.findById(id)
+      .populate('equipmentId', 'name')
+      .populate('performedBy', 'name');
     res.status(200).json(populatedUpdated);
   } catch (err) {
     console.error('Update maintenance error:', err);

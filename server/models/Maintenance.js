@@ -1,43 +1,37 @@
 const mongoose = require('mongoose');
 
-const maintenanceSchema = new mongoose.Schema(
-  {
-    equipmentId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Equipment',
-      required: [true, 'Equipment ID is required'],
-    },
-    description: {
-      type: String,
-      required: [true, 'Description is required'],
-      trim: true,
-      minlength: [5, 'Description must be at least 5 characters long'],
-    },
-    scheduledDate: {
-      type: Date,
-      required: [true, 'Scheduled date is required'],
-    },
-    performedAt: {
-      type: Date,
-    },
-    performedBy: {
-      type: String,
-      required: [true, 'Performed by is required'],
-      trim: true,
-      minlength: [2, 'Name must be at least 2 characters'],
-    },
-    status: {
-      type: String,
-      enum: {
-        values: ['pending', 'in progress', 'completed'],
-        message: 'Status must be either: pending, in progress, or completed',
-      },
-      default: 'pending',
-    },
+const MaintenanceSchema = new mongoose.Schema({
+  equipmentId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Equipment',
+    required: [true, 'Equipment ID is required'],
   },
-  {
-    timestamps: true, // Adds createdAt and updatedAt automatically
-  }
-);
+  description: {
+    type: String,
+    required: [true, 'Description is required'],
+    trim: true,
+  },
+  performedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: [true, 'Technician is required'],
+  },
+  status: {
+    type: String,
+    enum: ['pending', 'in progress', 'completed'],
+    default: 'pending',
+  },
+  scheduledDate: {
+    type: Date,
+    required: [true, 'Scheduled date is required'],
+  },
+  scheduledTime: {
+    type: String,
+    default: '',
+  },
+  performedAt: {
+    type: Date,
+  },
+});
 
-module.exports = mongoose.model('Maintenance', maintenanceSchema);
+module.exports = mongoose.model('Maintenance', MaintenanceSchema);

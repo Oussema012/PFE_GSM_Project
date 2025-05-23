@@ -21,6 +21,7 @@ import DeleteAlert from './DeleteAlert';
 import AcknowledgeAlert from './AcknowledgeAlert';
 import DetailAlert from './DetailAlert';
 
+
 const isValidObjectId = (id) => /^[0-9a-fA-F]{24}$/.test(id);
 
 const NetworkAlerts = () => {
@@ -50,14 +51,12 @@ const fetchAlerts = async () => {
   try {
     let url = '/api/alerts';
 
-    // Validate siteId early on if it's provided
     if (siteId && !isValidObjectId(siteId)) {
       setError('Invalid site ID format');
       setLoading(false);
       return;
     }
 
-    // Filter-based URL setup
     if (siteId) {
       switch (filter) {
         case 'active':
@@ -92,7 +91,6 @@ const fetchAlerts = async () => {
       }
     }
 
-    // Date range validation for resolved filter
     if (filter === 'resolved' && startDate && endDate) {
       if (isInvalidDateRange(startDate, endDate)) {
         setError('End date cannot be before start date');
@@ -105,11 +103,21 @@ const fetchAlerts = async () => {
       url += `?${params.toString()}`;
     }
 
-    // API call
     const response = await axios.get(url);
-    setAlerts(Array.isArray(response.data) ? response.data : []);
+    const normalizedAlerts = Array.isArray(response.data)
+      ? response.data.map((alert) => ({
+          ...alert,
+          siteId: alert.siteId?._id || alert.siteId,
+        }))
+      : [];
+    setAlerts(normalizedAlerts);
   } catch (err) {
-    setError(`Failed to fetch alerts: ${err.response?.data?.message || err.message}`);
+    if (err.response?.status === 404) {
+      setError('The requested alerts endpoint is not available. Try a different filter or check the backend configuration.');
+      setAlerts([]);
+    } else {
+      setError(`Failed to fetch alerts: ${err.response?.data?.message || err.message}`);
+    }
   } finally {
     setLoading(false);
   }
@@ -118,64 +126,67 @@ const fetchAlerts = async () => {
 
 
   const resolveAlert = async (id) => {
-    if (!isValidObjectId(id)) {
-      setError('Invalid alert ID format');
-      return;
-    }
+  if (!isValidObjectId(id)) {
+    setError('Invalid alert ID format');
+    return;
+  }
 
-    setResolving(id);
-    setError('');
-    setSuccessMessage('');
+  setResolving(id);
+  setError('');
+  setSuccessMessage('');
 
-    const maxRetries = 3;
-    let attempt = 1;
+  // Optimistic update
+  setAlerts((prevAlerts) =>
+    prevAlerts.map((alert) =>
+      alert._id === id
+        ? { ...alert, status: 'resolved', resolvedAt: new Date().toISOString() }
+        : alert
+    )
+  );
 
-    while (attempt <= maxRetries) {
-      try {
-        const response = await axios.put(`/api/alerts/resolve/${id}`, {
-          status: 'resolved',
-          resolvedAt: new Date().toISOString(),
-        });
-        setAlerts(
-          alerts.map((alert) => (alert._id === id ? { ...alert, ...response.data } : alert))
-        );
-        setSuccessMessage('Alert resolved successfully');
-        setTimeout(() => setSuccessMessage(''), 3000);
-        break;
-      } catch (err) {
-        if (attempt === maxRetries) {
-          setError(
-            `Failed to resolve alert after ${maxRetries} attempts: ${
-              err.response?.data?.message || err.message
-            }`
-          );
-        }
-        attempt++;
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-      }
-    }
+  try {
+    const response = await axios.put(`/api/alerts/resolve/${id}`);
+    const updatedAlert = response.data.alert; // Use response.data.alert
+
+    setAlerts((prevAlerts) =>
+      prevAlerts.map((alert) =>
+        alert._id === id
+          ? {
+              ...alert,
+              status: updatedAlert.status,
+              resolvedAt: updatedAlert.resolvedAt,
+              siteId: updatedAlert.siteId?._id || alert.siteId, // Ensure siteId remains a string
+            }
+          : alert
+      )
+    );
+    setSuccessMessage('Alert resolved successfully');
+    setTimeout(() => setSuccessMessage(''), 3000);
+  } catch (err) {
+    // Rollback optimistic update
+    setAlerts((prevAlerts) =>
+      prevAlerts.map((alert) =>
+        alert._id === id ? { ...alert, status: 'active', resolvedAt: null } : alert
+      )
+    );
+    setError(`Failed to resolve alert: ${err.response?.data?.message || err.message}`);
+  } finally {
     setResolving(null);
-  };
+  }
+};
 
  useEffect(() => {
   const filtered = alerts.filter((alert) => {
     const query = searchQuery?.toLowerCase() || '';
-
-    const siteIdStr =
-      typeof alert.siteId === 'string'
-        ? alert.siteId
-        : (alert.siteId && alert.siteId._id) || '';
-
+    const siteIdStr = alert.siteId || ''; // Fallback to empty string if undefined
     return (
       siteIdStr.toLowerCase().includes(query) ||
       (alert.type || '').toLowerCase().includes(query) ||
       (alert.message || '').toLowerCase().includes(query)
     );
   });
-
   setFilteredAlerts(filtered);
 }, [alerts, searchQuery]);
-
 
   useEffect(() => {
     fetchAlerts();
@@ -513,19 +524,23 @@ const fetchAlerts = async () => {
                                     onError={setError}
                                   />
                                 )}
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    resolveAlert(alert._id);
-                                  }}
-                                  className={`text-green-600 hover:text-green-900 ${
-                                    resolving === alert._id ? 'opacity-50 cursor-not-allowed' : ''
-                                  }`}
-                                  title="Resolve"
-                                  disabled={resolving === alert._id}
-                                >
-                                  <FiCheckCircle className="h-5 w-5" />
-                                </button>
+ <button
+  onClick={(e) => {
+    e.stopPropagation();
+    resolveAlert(alert._id);
+  }}
+  className={`flex items-center text-green-600 hover:text-green-900 ${
+    resolving === alert._id ? 'opacity-50 cursor-not-allowed' : ''
+  }`}
+  title="Resolve"
+  disabled={resolving === alert._id}
+>
+  {resolving === alert._id ? (
+    <FiRefreshCw className="h-5 w-5 animate-spin" />
+  ) : (
+    <FiCheckCircle className="h-5 w-5" />
+  )}
+</button>
                               </>
                             )}
                             <DeleteAlert

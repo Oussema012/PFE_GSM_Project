@@ -8,5 +8,6 @@ router.get('/', siteController.getSites);
 router.get('/:id', siteController.getSiteById);
 router.put('/:id', siteController.updateSite);
 router.delete('/:id', siteController.deleteSite);
+router.get('/', siteController.getAllSites);
 
 module.exports = router;

@@ -13,5 +13,5 @@ router.put('/:id', equipmentController.updateEquipment);
 
 // Delete equipment by ID
 router.delete('/:id', equipmentController.deleteEquipment);
-
+router.get('/options', equipmentController.getEquipmentOptions); // 👈 Add this route
 module.exports = router;

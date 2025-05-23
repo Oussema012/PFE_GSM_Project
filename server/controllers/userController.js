@@ -1,153 +1,52 @@
 const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 
-const validRoles = ['technician', 'engineer'];
-
-// ✅ Create a new technician or engineer (No admin check)
-exports.createUser = async (req, res) => {
-  try {
-    const { name, email, password, role, department } = req.body;
-
-    if (!validRoles.includes(role)) {
-      return res.status(400).json({ success: false, message: 'Role must be "technician" or "engineer".' });
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return res.status(400).json({ success: false, message: 'Invalid email format.' });
-    }
-
-    if (!password || password.length < 6) {
-      return res.status(400).json({ success: false, message: 'Password must be at least 6 characters long.' });
-    }
-
-    const existingUser = await User.findOne({ email }).lean();
-    if (existingUser) {
-      return res.status(400).json({ success: false, message: 'Email already exists.' });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const newUser = new User({
-      name,
-      email,
-      password: hashedPassword,
-      role,
-      department,
-      isActive: true
-    });
-
-    await newUser.save();
-
-    const userResponse = newUser.toObject();
-    delete userResponse.password;
-
-    res.status(201).json({ success: true, message: 'User created successfully', user: userResponse });
-  } catch (error) {
-    console.error('Create User Error:', error);
-    res.status(500).json({ success: false, message: 'Error creating user', error });
-  }
-};
-
-// ✅ Get all users (No restrictions)
+// Get all users
 exports.getAllUsers = async (req, res) => {
   try {
-    const users = await User.find().select('-password').lean();
-    res.status(200).json({ success: true, data: users });
+    const users = await User.find(); // fetch all users
+    res.status(200).json(users);
   } catch (error) {
-    console.error('Fetch Users Error:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch users', error: error.message });
+    res.status(500).json({ message: "Server error", error });
   }
 };
 
-// ✅ Get users by role
-exports.getUsersByRole = async (req, res) => {
+// Get all technicians only
+exports.getAllTechnicians = async (req, res) => {
   try {
-    const { role } = req.params;
-
-    if (!validRoles.includes(role)) {
-      return res.status(400).json({ success: false, message: 'Invalid role' });
-    }
-
-    const users = await User.find({ role }).select('-password').lean();
-    res.status(200).json({ success: true, data: users });
+    const technicians = await User.find({ role: 'technician' });
+    res.status(200).json({ success: true, data: technicians });
   } catch (error) {
-    console.error('Fetch Users by Role Error:', error);
-    res.status(500).json({ success: false, message: 'Error fetching users by role', error });
+    res.status(500).json({ success: false, message: "Server error", error });
   }
 };
 
-// ✅ Update user profile
-exports.updateUser = async (req, res) => {
+
+// Get one technician by ID
+exports.getTechnicianById = async (req, res) => {
   try {
-    const { id } = req.params;
-    const { name, email, role, department, isActive } = req.body;
-
-    const user = await User.findById(id);
-    if (!user || !validRoles.includes(user.role)) {
-      return res.status(404).json({ success: false, message: 'User not found or invalid role' });
+    const technician = await User.findOne({ _id: req.params.id, role: 'technician' });
+    if (!technician) {
+      return res.status(404).json({ message: "Technician not found" });
     }
-
-    user.name = name ?? user.name;
-    user.email = email ?? user.email;
-    user.role = role ?? user.role;
-    user.department = department ?? user.department;
-
-    if (typeof isActive === 'boolean') {
-      user.isActive = isActive;
-    }
-
-    await user.save();
-
-    const userResponse = user.toObject();
-    delete userResponse.password;
-
-    res.status(200).json({ success: true, message: 'User updated successfully', user: userResponse });
+    res.status(200).json(technician);
   } catch (error) {
-    console.error('Update User Error:', error);
-    res.status(500).json({ success: false, message: 'Error updating user', error });
+    res.status(500).json({ message: "Server error", error });
   }
 };
+exports.signout = (req, res) => {
+  // This depends on how you handle authentication (JWT, sessions, etc.)
+  // Here's a basic example assuming session-based auth:
 
-// ✅ Delete user
-exports.deleteUser = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const user = await User.findById(id);
-    if (!user || !validRoles.includes(user.role)) {
-      return res.status(404).json({ success: false, message: 'User not found or invalid role' });
-    }
-
-    await User.findByIdAndDelete(id);
-    res.status(200).json({ success: true, message: 'User deleted successfully' });
-  } catch (error) {
-    console.error('Delete User Error:', error);
-    res.status(500).json({ success: false, message: 'Error deleting user', error });
-  }
-};
-
-// ✅ Reset user password
-exports.resetUserPassword = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { newPassword } = req.body;
-
-    if (!newPassword || newPassword.length < 6) {
-      return res.status(400).json({ success: false, message: 'New password must be at least 6 characters long.' });
-    }
-
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-
-    const user = await User.findByIdAndUpdate(id, { password: hashedPassword }, { new: true });
-
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-
-    res.status(200).json({ success: true, message: 'Password reset successfully' });
-  } catch (error) {
-    console.error('Reset Password Error:', error);
-    res.status(500).json({ success: false, message: 'Error resetting password', error });
+  if (req.session) {
+    req.session.destroy(err => {
+      if (err) {
+        return res.status(500).json({ message: "Error signing out" });
+      } else {
+        return res.status(200).json({ message: "Signed out successfully" });
+      }
+    });
+  } else {
+    res.status(200).json({ message: "No active session found" });
   }
 };

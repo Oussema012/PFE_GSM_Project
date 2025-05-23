@@ -1,36 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import {
-  Container,
-  Typography,
-  TextField,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
-  Paper,
-  IconButton,
-  Box,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Snackbar,
-  Alert,
-  MenuItem,
-  Select,
-  InputAdornment,
-} from '@mui/material';
-import { Search } from '@mui/icons-material';
+  FiUsers,
+  FiSearch,
+  FiPlus,
+  FiEdit2,
+  FiTrash2,
+  FiKey,
+  FiCheck,
+  FiX,
+  FiUser,
+  FiMail,
+  FiLock,
+  FiBriefcase,
+  FiActivity,
+} from 'react-icons/fi';
 
 const NetworkReports = () => {
   const [users, setUsers] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [snackbarMessage, setSnackbarMessage] = useState('');
-  const [showSnackbar, setShowSnackbar] = useState(false);
-  const [snackbarSeverity, setSnackbarSeverity] = useState('error');
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', type: '' });
   const [selectedRole, setSelectedRole] = useState('all');
   const [openCreateModal, setOpenCreateModal] = useState(false);
   const [openUpdateModal, setOpenUpdateModal] = useState(false);
@@ -39,15 +29,13 @@ const NetworkReports = () => {
   const [updateUser, setUpdateUser] = useState({ id: '', name: '', email: '', role: '', department: '' });
   const [resetPassword, setResetPassword] = useState('');
   const [resetUserId, setResetUserId] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [formErrors, setFormErrors] = useState({});
 
   const API_URL = 'http://localhost:3000/api/users';
 
   useEffect(() => {
-    if (selectedRole === 'all') {
-      fetchUsers();
-    } else {
-      fetchUsersByRole(selectedRole);
-    }
+    fetchUsers();
   }, [selectedRole]);
 
   useEffect(() => {
@@ -62,51 +50,58 @@ const NetworkReports = () => {
   }, [searchTerm, users]);
 
   const fetchUsers = async () => {
+    setLoading(true);
     try {
-      const res = await axios.get(`${API_URL}`);
+      const endpoint = selectedRole === 'all' ? API_URL : `${API_URL}/role/${selectedRole}`;
+      const res = await axios.get(endpoint);
       const usersData = res.data.data || res.data;
       setUsers(usersData);
     } catch (err) {
       console.error('Error fetching users:', err);
-      triggerSnackbar('Failed to fetch user reports', 'error');
+      showSnackbar('Failed to fetch user reports', 'error');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const fetchUsersByRole = async (role) => {
-    try {
-      const res = await axios.get(`${API_URL}/role/${role}`);
-      const usersData = res.data.data || res.data;
-      setUsers(usersData);
-    } catch (err) {
-      console.error('Error fetching users by role:', err);
-      triggerSnackbar('Failed to fetch role-based reports', 'error');
-    }
+  const validateForm = (form) => {
+    const errors = {};
+    if (!form.name.trim()) errors.name = 'Name is required';
+    if (!form.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errors.email = 'Valid email is required';
+    if (!form.role) errors.role = 'Role is required';
+    if (!form.department.trim()) errors.department = 'Department is required';
+    return errors;
   };
 
   const createUser = async () => {
-    if (!newUser.name || !newUser.email || !newUser.role || !newUser.department) {
-      triggerSnackbar('All fields are required', 'error');
+    const errors = validateForm(newUser);
+    if (Object.keys(errors).length) {
+      setFormErrors(errors);
+      showSnackbar('Please fill all required fields', 'error');
       return;
     }
     try {
       await axios.post(`${API_URL}/create`, newUser);
-      triggerSnackbar('User created successfully', 'success');
+      showSnackbar('User created successfully', 'success');
       setOpenCreateModal(false);
       setNewUser({ name: '', email: '', role: '', department: '' });
+      setFormErrors({});
       fetchUsers();
     } catch (err) {
       console.error('Error creating user:', err);
-      triggerSnackbar(err.response?.data?.message || 'Failed to create user', 'error');
+      showSnackbar(err.response?.data?.message || 'Failed to create user', 'error');
     }
   };
 
   const updateUserDetails = async () => {
     if (!updateUser.id) {
-      triggerSnackbar('Invalid user ID', 'error');
+      showSnackbar('Invalid user ID', 'error');
       return;
     }
-    if (!updateUser.name || !updateUser.email || !updateUser.role || !updateUser.department) {
-      triggerSnackbar('All fields are required', 'error');
+    const errors = validateForm(updateUser);
+    if (Object.keys(errors).length) {
+      setFormErrors(errors);
+      showSnackbar('Please fill all required fields', 'error');
       return;
     }
     try {
@@ -116,84 +111,55 @@ const NetworkReports = () => {
         role: updateUser.role,
         department: updateUser.department,
       });
-      triggerSnackbar('User updated successfully', 'success');
+      showSnackbar('User updated successfully', 'success');
       setOpenUpdateModal(false);
-      setUpdateUser({ id: '', name: '', email: '', role: '', department: '' });
+      setFormErrors({});
       fetchUsers();
     } catch (err) {
       console.error('Error updating user:', err);
-      if (err.response?.status === 404) {
-        triggerSnackbar('User not found', 'error');
-      } else {
-        triggerSnackbar(err.response?.data?.message || 'Failed to update user', 'error');
-      }
+      showSnackbar(err.response?.data?.message || 'Failed to update user', 'error');
     }
   };
 
   const deleteUser = async (id) => {
-    if (!id) {
-      triggerSnackbar('Invalid user ID', 'error');
-      return;
-    }
     if (!window.confirm('Are you sure you want to delete this user?')) return;
     try {
       await axios.delete(`${API_URL}/${id}`);
-      triggerSnackbar('User deleted successfully', 'success');
+      showSnackbar('User deleted successfully', 'success');
       fetchUsers();
     } catch (err) {
       console.error('Error deleting user:', err);
-      if (err.response?.status === 404) {
-        triggerSnackbar('User not found', 'error');
-      } else {
-        triggerSnackbar(err.response?.data?.message || 'Failed to delete user', 'error');
-      }
+      showSnackbar(err.response?.data?.message || 'Failed to delete user', 'error');
     }
   };
 
   const resetUserPassword = async () => {
-    if (!resetUserId) {
-      triggerSnackbar('Invalid user ID', 'error');
-      return;
-    }
-    if (!resetPassword) {
-      triggerSnackbar('Password is required', 'error');
+    if (!resetPassword || resetPassword.length < 6) {
+      showSnackbar('Password must be at least 6 characters', 'error');
       return;
     }
     try {
       await axios.put(`${API_URL}/reset-password/${resetUserId}`, { newPassword: resetPassword });
-      triggerSnackbar('Password reset successfully', 'success');
+      showSnackbar('Password reset successfully', 'success');
       setOpenResetModal(false);
       setResetPassword('');
-      setResetUserId(null);
-      fetchUsers();
     } catch (err) {
       console.error('Error resetting password:', err);
-      if (err.response?.status === 404) {
-        triggerSnackbar('User not found', 'error');
-      } else {
-        triggerSnackbar(err.response?.data?.message || 'Failed to reset password', 'error');
-      }
+      showSnackbar(err.response?.data?.message || 'Failed to reset password', 'error');
     }
   };
 
-  const triggerSnackbar = (message, severity = 'error') => {
-    setSnackbarMessage(message);
-    setSnackbarSeverity(severity);
-    setShowSnackbar(true);
-  };
-
-  const handleSnackbarClose = () => {
-    setShowSnackbar(false);
+  const showSnackbar = (message, type = 'error') => {
+    setSnackbar({ open: true, message, type });
+    setTimeout(() => setSnackbar({ ...snackbar, open: false }), 4000);
   };
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleString();
-  };
-
-  const handleRoleChange = (e) => {
-    setSelectedRole(e.target.value);
-    setSearchTerm('');
+    return new Date(dateString).toLocaleString('en-US', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
   };
 
   const openUpdateModalForUser = (user) => {
@@ -204,6 +170,7 @@ const NetworkReports = () => {
       role: user.role || '',
       department: user.department || '',
     });
+    setFormErrors({});
     setOpenUpdateModal(true);
   };
 
@@ -214,284 +181,387 @@ const NetworkReports = () => {
   };
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4">Network Activity Reports</Typography>
-        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-          <Select
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto bg-base-100">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <h1 className="text-2xl sm:text-3xl font-bold text-base-content flex items-center gap-2">
+          <FiUsers className="text-primary" size={24} />
+          Network Activity Reports
+        </h1>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full sm:w-auto">
+          <select
+            className="select select-bordered select-sm w-full sm:w-40 focus:outline-none focus:ring-2 focus:ring-primary transition-shadow"
             value={selectedRole}
-            onChange={handleRoleChange}
-            size="small"
-            sx={{ width: 150 }}
+            onChange={(e) => setSelectedRole(e.target.value)}
+            aria-label="Filter by role"
           >
-            <MenuItem value="all">All Roles</MenuItem>
-            <MenuItem value="engineer">Engineer</MenuItem>
-            <MenuItem value="admin">Admin</MenuItem>
-          </Select>
-          <TextField
-            variant="outlined"
-            placeholder="Search by name, email, or department"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            size="small"
-            sx={{ width: 250 }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Search />
-                </InputAdornment>
-              ),
-            }}
-          />
-          <IconButton
+            <option value="all">All Roles</option>
+            <option value="technician">Technician</option>
+            <option value="admin">Admin</option>
+          </select>
+          <div className="relative w-full sm:w-64">
+            <input
+              type="text"
+              placeholder="Search users..."
+              className="input input-bordered input-sm w-full pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-primary transition-shadow"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              aria-label="Search users"
+            />
+            <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-base-content/50" size={16} />
+          </div>
+          <button
+            className="btn btn-primary btn-sm w-full sm:w-auto flex items-center gap-2"
             onClick={() => setOpenCreateModal(true)}
-            color="primary"
-            aria-label="create user"
-            sx={{ bgcolor: 'primary.main', color: 'white', '&:hover': { bgcolor: 'primary.dark' } }}
           >
-            ➕
-          </IconButton>
-        </Box>
-      </Box>
+            <FiPlus size={16} /> Add User
+          </button>
+        </div>
+      </div>
 
       {/* Create User Modal */}
-      <Dialog open={openCreateModal} onClose={() => setOpenCreateModal(false)} fullWidth maxWidth="sm">
-        <DialogTitle>Create New User</DialogTitle>
-        <DialogContent>
-          <TextField
-            fullWidth
-            label="Name"
-            value={newUser.name || ''}
-            onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
-            margin="normal"
-            variant="outlined"
-          />
-          <TextField
-            fullWidth
-            label="Email"
-            type="email"
-            value={newUser.email || ''}
-            onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-            margin="normal"
-            variant="outlined"
-          />
-          <Select
-            fullWidth
-            value={newUser.role || ''}
-            onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
-            displayEmpty
-            margin="normal"
-            variant="outlined"
-            sx={{ mt: 2, mb: 1 }}
-          >
-            <MenuItem value="">Select Role</MenuItem>
-            <MenuItem value="engineer">Engineer</MenuItem>
-            <MenuItem value="admin">Admin</MenuItem>
-          </Select>
-          <TextField
-            fullWidth
-            label="Department"
-            value={newUser.department || ''}
-            onChange={(e) => setNewUser({ ...newUser, department: e.target.value })}
-            margin="normal"
-            variant="outlined"
-          />
-        </DialogContent>
-        <DialogActions>
-          <IconButton
-            onClick={createUser}
-            color="primary"
-            aria-label="create"
-            sx={{ bgcolor: 'primary.main', color: 'white', '&:hover': { bgcolor: 'primary.dark' } }}
-          >
-            ✅
-          </IconButton>
-          <IconButton
-            onClick={() => setOpenCreateModal(false)}
-            color="secondary"
-            aria-label="cancel"
-            sx={{ bgcolor: 'grey.500', color: 'white', '&:hover': { bgcolor: 'grey.700' } }}
-          >
-            ❌
-          </IconButton>
-        </DialogActions>
-      </Dialog>
+      <div className={`modal ${openCreateModal ? 'modal-open' : ''}`}>
+        <div className="modal-box bg-base-100 rounded-lg shadow-lg max-w-md p-6 transition-transform duration-300 ease-out">
+          <h3 className="font-bold text-lg text-base-content mb-4">Create New User</h3>
+          <div className="space-y-4">
+            <div className="form-control">
+              <label className="label flex items-center gap-2 text-sm text-base-content/80">
+                <FiUser size={16} /> Name
+              </label>
+              <input
+                type="text"
+                className={`input input-bordered w-full ${formErrors.name ? 'input-error' : ''}`}
+                value={newUser.name}
+                onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
+                aria-invalid={!!formErrors.name}
+                aria-describedby={formErrors.name ? 'name-error' : undefined}
+              />
+              {formErrors.name && (
+                <p id="name-error" className="text-error text-xs mt-1">
+                  {formErrors.name}
+                </p>
+              )}
+            </div>
+            <div className="form-control">
+              <label className="label flex items-center gap-2 text-sm text-base-content/80">
+                <FiMail size={16} /> Email
+              </label>
+              <input
+                type="email"
+                className={`input input-bordered w-full ${formErrors.email ? 'input-error' : ''}`}
+                value={newUser.email}
+                onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                aria-invalid={!!formErrors.email}
+                aria-describedby={formErrors.email ? 'email-error' : undefined}
+              />
+              {formErrors.email && (
+                <p id="email-error" className="text-error text-xs mt-1">
+                  {formErrors.email}
+                </p>
+              )}
+            </div>
+            <div className="form-control">
+              <label className="label flex items-center gap-2 text-sm text-base-content/80">
+                <FiBriefcase size={16} /> Role
+              </label>
+              <select
+                className={`select select-bordered w-full ${formErrors.role ? 'select-error' : ''}`}
+                value={newUser.role}
+                onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
+                aria-invalid={!!formErrors.role}
+                aria-describedby={formErrors.role ? 'role-error' : undefined}
+              >
+                <option value="">Select Role</option>
+                <option value="technician">Technician</option>
+                <option value="admin">Admin</option>
+              </select>
+              {formErrors.role && (
+                <p id="role-error" className="text-error text-xs mt-1">
+                  {formErrors.role}
+                </p>
+              )}
+            </div>
+            <div className="form-control">
+              <label className="label flex items-center gap-2 text-sm text-base-content/80">
+                <FiBriefcase size={16} /> Department
+              </label>
+              <input
+                type="text"
+                className={`input input-bordered w-full ${formErrors.department ? 'input-error' : ''}`}
+                value={newUser.department}
+                onChange={(e) => setNewUser({ ...newUser, department: e.target.value })}
+                aria-invalid={!!formErrors.department}
+                aria-describedby={formErrors.department ? 'department-error' : undefined}
+              />
+              {formErrors.department && (
+                <p id="department-error" className="text-error text-xs mt-1">
+                  {formErrors.department}
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="modal-action mt-6 flex justify-end gap-2">
+            <button
+              className="btn btn-ghost btn-sm text-base-content/70 hover:bg-base-200"
+              onClick={() => {
+                setOpenCreateModal(false);
+                setFormErrors({});
+              }}
+            >
+              <FiX size={16} /> Cancel
+            </button>
+            <button className="btn btn-primary btn-sm flex items-center gap-2" onClick={createUser}>
+              <FiCheck size={16} /> Create
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* Update User Modal */}
-      <Dialog open={openUpdateModal} onClose={() => setOpenUpdateModal(false)} fullWidth maxWidth="sm">
-        <DialogTitle>Update User</DialogTitle>
-        <DialogContent>
-          <TextField
-            fullWidth
-            label="Name"
-            value={updateUser.name || ''}
-            onChange={(e) => setUpdateUser({ ...updateUser, name: e.target.value })}
-            margin="normal"
-            variant="outlined"
-          />
-          <TextField
-            fullWidth
-            label="Email"
-            type="email"
-            value={updateUser.email || ''}
-            onChange={(e) => setUpdateUser({ ...updateUser, email: e.target.value })}
-            margin="normal"
-            variant="outlined"
-          />
-          <Select
-            fullWidth
-            value={updateUser.role || ''}
-            onChange={(e) => setUpdateUser({ ...updateUser, role: e.target.value })}
-            displayEmpty
-            margin="normal"
-            variant="outlined"
-            sx={{ mt: 2, mb: 1 }}
-          >
-            <MenuItem value="">Select Role</MenuItem>
-            <MenuItem value="engineer">Engineer</MenuItem>
-            <MenuItem value="admin">Admin</MenuItem>
-          </Select>
-          <TextField
-            fullWidth
-            label="Department"
-            value={updateUser.department || ''}
-            onChange={(e) => setUpdateUser({ ...updateUser, department: e.target.value })}
-            margin="normal"
-            variant="outlined"
-          />
-        </DialogContent>
-        <DialogActions>
-          <IconButton
-            onClick={updateUserDetails}
-            color="primary"
-            aria-label="update"
-            sx={{ bgcolor: 'primary.main', color: 'white', '&:hover': { bgcolor: 'primary.dark' } }}
-          >
-            ✅
-          </IconButton>
-          <IconButton
-            onClick={() => setOpenUpdateModal(false)}
-            color="secondary"
-            aria-label="cancel"
-            sx={{ bgcolor: 'grey.500', color: 'white', '&:hover': { bgcolor: 'grey.700' } }}
-          >
-            ❌
-          </IconButton>
-        </DialogActions>
-      </Dialog>
+      <div className={`modal ${openUpdateModal ? 'modal-open' : ''}`}>
+        <div className="modal-box bg-base-100 rounded-lg shadow-lg max-w-md p-6 transition-transform duration-300 ease-out">
+          <h3 className="font-bold text-lg text-base-content mb-4">Update User</h3>
+          <div className="space-y-4">
+            <div className="form-control">
+              <label className="label flex items-center gap-2 text-sm text-base-content/80">
+                <FiUser size={16} /> Name
+              </label>
+              <input
+                type="text"
+                className={`input input-bordered w-full ${formErrors.name ? 'input-error' : ''}`}
+                value={updateUser.name}
+                onChange={(e) => setUpdateUser({ ...updateUser, name: e.target.value })}
+                aria-invalid={!!formErrors.name}
+                aria-describedby={formErrors.name ? 'name-error' : undefined}
+              />
+              {formErrors.name && (
+                <p id="name-error" className="text-error text-xs mt-1">
+                  {formErrors.name}
+                </p>
+              )}
+            </div>
+            <div className="form-control">
+              <label className="label flex items-center gap-2 text-sm text-base-content/80">
+                <FiMail size={16} /> Email
+              </label>
+              <input
+                type="email"
+                className={`input input-bordered w-full ${formErrors.email ? 'input-error' : ''}`}
+                value={updateUser.email}
+                onChange={(e) => setUpdateUser({ ...updateUser, email: e.target.value })}
+                aria-invalid={!!formErrors.email}
+                aria-describedby={formErrors.email ? 'email-error' : undefined}
+              />
+              {formErrors.email && (
+                <p id="email-error" className="text-error text-xs mt-1">
+                  {formErrors.email}
+                </p>
+              )}
+            </div>
+            <div className="form-control">
+              <label className="label flex items-center gap-2 text-sm text-base-content/80">
+                <FiBriefcase size={16} /> Role
+              </label>
+              <select
+                className={`select select-bordered w-full ${formErrors.role ? 'select-error' : ''}`}
+                value={updateUser.role}
+                onChange={(e) => setUpdateUser({ ...updateUser, role: e.target.value })}
+                aria-invalid={!!formErrors.role}
+                aria-describedby={formErrors.role ? 'role-error' : undefined}
+              >
+                <option value="">Select Role</option>
+                <option value="technician">Technician</option>
+                <option value="admin">Admin</option>
+              </select>
+              {formErrors.role && (
+                <p id="role-error" className="text-error text-xs mt-1">
+                  {formErrors.role}
+                </p>
+              )}
+            </div>
+            <div className="form-control">
+              <label className="label flex items-center gap-2 text-sm text-base-content/80">
+                <FiBriefcase size={16} /> Department
+              </label>
+              <input
+                type="text"
+                className={`input input-bordered w-full ${formErrors.department ? 'input-error' : ''}`}
+                value={updateUser.department}
+                onChange={(e) => setUpdateUser({ ...updateUser, department: e.target.value })}
+                aria-invalid={!!formErrors.department}
+                aria-describedby={formErrors.department ? 'department-error' : undefined}
+              />
+              {formErrors.department && (
+                <p id="department-error" className="text-error text-xs mt-1">
+                  {formErrors.department}
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="modal-action mt-6 flex justify-end gap-2">
+            <button
+              className="btn btn-ghost btn-sm text-base-content/70 hover:bg-base-200"
+              onClick={() => {
+                setOpenUpdateModal(false);
+                setFormErrors({});
+              }}
+            >
+              <FiX size={16} /> Cancel
+            </button>
+            <button className="btn btn-primary btn-sm flex items-center gap-2" onClick={updateUserDetails}>
+              <FiCheck size={16} /> Update
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* Reset Password Modal */}
-      <Dialog open={openResetModal} onClose={() => setOpenResetModal(false)} fullWidth maxWidth="sm">
-        <DialogTitle>Reset Password</DialogTitle>
-        <DialogContent>
-          <TextField
-            fullWidth
-            label="New Password"
-            type="password"
-            value={resetPassword || ''}
-            onChange={(e) => setResetPassword(e.target.value)}
-            margin="normal"
-            variant="outlined"
-          />
-        </DialogContent>
-        <DialogActions>
-          <IconButton
-            onClick={resetUserPassword}
-            color="primary"
-            aria-label="reset"
-            sx={{ bgcolor: 'primary.main', color: 'white', '&:hover': { bgcolor: 'primary.dark' } }}
-          >
-            ✅
-          </IconButton>
-          <IconButton
-            onClick={() => setOpenResetModal(false)}
-            color="secondary"
-            aria-label="cancel"
-            sx={{ bgcolor: 'grey.500', color: 'white', '&:hover': { bgcolor: 'grey.700' } }}
-          >
-            ❌
-          </IconButton>
-        </DialogActions>
-      </Dialog>
+      <div className={`modal ${openResetModal ? 'modal-open' : ''}`}>
+        <div className="modal-box bg-base-100 rounded-lg shadow-lg max-w-sm p-6 transition-transform duration-300 ease-out">
+          <h3 className="font-bold text-lg text-base-content mb-4">Reset Password</h3>
+          <div className="form-control">
+            <label className="label flex items-center gap-2 text-sm text-base-content/80">
+              <FiLock size={16} /> New Password
+            </label>
+            <input
+              type="password"
+              className="input input-bordered w-full"
+              value={resetPassword}
+              onChange={(e) => setResetPassword(e.target.value)}
+              aria-invalid={resetPassword.length > 0 && resetPassword.length < 6}
+              aria-describedby={resetPassword.length > 0 && resetPassword.length < 6 ? 'password-error' : undefined}
+            />
+            {resetPassword.length > 0 && resetPassword.length < 6 && (
+              <p id="password-error" className="text-error text-xs mt-1">
+                Password must be at least 6 characters
+              </p>
+            )}
+          </div>
+          <div className="modal-action mt-6 flex justify-end gap-2">
+            <button
+              className="btn btn-ghost btn-sm text-base-content/70 hover:bg-base-200"
+              onClick={() => setOpenResetModal(false)}
+            >
+              <FiX size={16} /> Cancel
+            </button>
+            <button className="btn btn-primary btn-sm flex items-center gap-2" onClick={resetUserPassword}>
+              <FiCheck size={16} /> Reset
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* Users Table */}
-      <Paper sx={{ p: 2, mt: 3 }}>
-        <Table>
-          <TableHead>
-            <TableRow sx={{ bgcolor: 'primary.main' }}>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Name</TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Email</TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Role</TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Department</TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Login Count</TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Last Active</TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="right">
-                Actions
-              </TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {filteredUsers.map((user) => (
-              <TableRow key={user._id} hover>
-                <TableCell>{user.name || 'N/A'}</TableCell>
-                <TableCell>{user.email || 'N/A'}</TableCell>
-                <TableCell>
-                  <Box
-                    component="span"
-                    sx={{
-                      p: 0.5,
-                      borderRadius: 1,
-                      bgcolor: user.role === 'engineer' ? 'info.light' : 'success.light',
-                      color: user.role === 'engineer' ? 'info.contrastText' : 'success.contrastText',
-                    }}
-                  >
-                    {user.role || 'N/A'}
-                  </Box>
-                </TableCell>
-                <TableCell>{user.department || 'N/A'}</TableCell>
-                <TableCell>{user.loginCount || 0}</TableCell>
-                <TableCell>{formatDate(user.lastActive)}</TableCell>
-                <TableCell align="right">
-                  <IconButton
-                    onClick={() => openUpdateModalForUser(user)}
-                    sx={{ bgcolor: 'warning.main', color: 'white', '&:hover': { bgcolor: 'warning.dark' }, mr: 1 }}
-                    aria-label="edit user"
-                  >
-                    ✏️
-                  </IconButton>
-                  <IconButton
-                    onClick={() => deleteUser(user._id)}
-                    sx={{ bgcolor: 'error.main', color: 'white', '&:hover': { bgcolor: 'error.dark' }, mr: 1 }}
-                    aria-label="delete user"
-                  >
-                    🗑️
-                  </IconButton>
-                  <IconButton
-                    onClick={() => openResetModalForUser(user._id)}
-                    sx={{ bgcolor: 'info.main', color: 'white', '&:hover': { bgcolor: 'info.dark' } }}
-                    aria-label="reset password"
-                  >
-                    🔑
-                  </IconButton>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </Paper>
+      <div className="card bg-base-100 shadow-md rounded-lg overflow-hidden">
+        <div className="card-body p-0">
+          {loading ? (
+            <div className="animate-pulse space-y-3 p-4">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="flex space-x-4">
+                  <div className="h-4 bg-base-200 rounded w-1/4"></div>
+                  <div className="h-4 bg-base-200 rounded w-1/4"></div>
+                  <div className="h-4 bg-base-200 rounded w-1/6"></div>
+                  <div className="h-4 bg-base-200 rounded w-1/6"></div>
+                  <div className="h-4 bg-base-200 rounded w-1/12"></div>
+                  <div className="h-4 bg-base-200 rounded w-1/6"></div>
+                  <div className="h-4 bg-base-200 rounded w-1/6"></div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="table w-full">
+                <thead>
+                  <tr className="bg-base-200 text-base-content/80 text-xs uppercase tracking-wide">
+                    <th className="py-3 px-4">Name</th>
+                    <th className="py-3 px-4">Email</th>
+                    <th className="py-3 px-4">Role</th>
+                    <th className="py-3 px-4">Department</th>
+                    <th className="py-3 px-4">
+                      <div className="flex items-center gap-1">
+                        <FiActivity size={16} /> Activity
+                      </div>
+                    </th>
+                    <th className="py-3 px-4">Last Active</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredUsers.length > 0 ? (
+                    filteredUsers.map((user) => (
+                      <tr
+                        key={user._id}
+                        className="hover:bg-white/50 transition-colors duration-200"
+                      >
+                        <td className="py-3 px-4 text-sm">{user.name || 'N/A'}</td>
+                        <td className="py-3 px-4 text-sm">{user.email || 'N/A'}</td>
+                        <td className="py-3 px-4">
+                          <span
+                            className={`badge badge-sm ${
+                              user.role === 'technician' ? 'badge-info' : 'badge-success'
+                            } capitalize`}
+                          >
+                            {user.role || 'N/A'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-sm">{user.department || 'N/A'}</td>
+                        <td className="py-3 px-4 text-sm">{user.loginCount || 0}</td>
+                        <td className="py-3 px-4 text-sm">{formatDate(user.lastActive)}</td>
+                        <td className="py-3 px-4 flex justify-end gap-2">
+                          <button
+                            className="btn btn-warning btn-xs btn-circle tooltip"
+                            onClick={() => openUpdateModalForUser(user)}
+                            data-tip="Edit User"
+                            aria-label="Edit user"
+                          >
+                            <FiEdit2 size={14} />
+                          </button>
+                          <button
+                            className="btn btn-error btn-xs btn-circle tooltip"
+                            onClick={() => deleteUser(user._id)}
+                            data-tip="Delete User"
+                            aria-label="Delete user"
+                          >
+                            <FiTrash2 size={14} />
+                          </button>
+                          <button
+                            className="btn btn-info btn-xs btn-circle tooltip"
+                            onClick={() => openResetModalForUser(user._id)}
+                            data-tip="Reset Password"
+                            aria-label="Reset password"
+                          >
+                            <FiKey size={14} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="7" className="text-center py-10 text-base-content/60 text-sm">
+                        No users found
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Snackbar */}
-      <Snackbar
-        open={showSnackbar}
-        autoHideDuration={4000}
-        onClose={handleSnackbarClose}
-        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-      >
-        <Alert onClose={handleSnackbarClose} severity={snackbarSeverity} sx={{ width: '100%' }}>
-          {snackbarMessage}
-        </Alert>
-      </Snackbar>
-    </Container>
+      {snackbar.open && (
+        <div className="toast toast-top toast-end transition-opacity duration-300 ease-out">
+          <div
+            className={`alert ${
+              snackbar.type === 'error' ? 'alert-error' : 'alert-success'
+            } rounded-md shadow-md flex items-center gap-2 px-4 py-2`}
+          >
+            <span className="text-sm">{snackbar.message}</span>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 

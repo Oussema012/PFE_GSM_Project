@@ -15,6 +15,8 @@ import {
   FaGlobe 
 } from "react-icons/fa";
 import axios from 'axios';
+import { signoutSuccess } from '../redux/user/userSlice';
+import { useSelector, useDispatch } from 'react-redux';
 import DashOverview from "../components/Admin/DashOverview";
 import DashUserManagement from "../components/Admin/DashUserManagement";
 import DashReports from "../components/Admin/DashReports";
@@ -28,7 +30,8 @@ const AdminDashboard = () => {
   const location = useLocation();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [unreadAlerts, setUnreadAlerts] = useState(0);
-  const [username] = useState('Admin');
+  const currentUser = useSelector((state) => state.user.currentUser);
+  const dispatch = useDispatch();
 
   // Set active tab from URL query parameter
   useEffect(() => {
@@ -42,8 +45,14 @@ const AdminDashboard = () => {
   }, [location.search]);
 
   // Handle sign out
-  const handleSignOut = () => {
-    navigate("/login");
+  const signOut = async () => {
+    try {
+      await axios.post('http://localhost:3000/signout');
+      dispatch(signoutSuccess());
+      navigate("/");
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
   };
 
   const renderTabContent = () => {
@@ -77,7 +86,8 @@ const AdminDashboard = () => {
             <h1 className="text-xl font-bold">Admin Console</h1>
           </div>
           <div className="mt-4 text-sm text-blue-200">
-            Welcome back, <span className="font-medium text-white">{username}</span>
+            Welcome back, <span className="font-medium text-white">{currentUser?.username || 'Admin'}</span>
+            <div className="text-xs text-blue-300 mt-1 truncate">{currentUser?.email}</div>
           </div>
         </div>
 
@@ -153,7 +163,7 @@ const AdminDashboard = () => {
         {/* Sidebar Footer */}
         <div className="p-4 border-t border-blue-700">
           <button 
-            onClick={handleSignOut}
+            onClick={signOut}
             className="flex items-center w-full px-4 py-2 text-sm text-blue-200 hover:text-white rounded-lg hover:bg-blue-700 transition"
           >
             <FaSignOutAlt className="mr-3" />
@@ -191,8 +201,8 @@ const AdminDashboard = () => {
               
               <div className="flex items-center space-x-2">
                 <div className="text-right hidden md:block">
-                  <div className="font-medium text-gray-800">{username}</div>
-                  <div className="text-xs text-gray-500">System Administrator</div>
+                  <div className="font-medium text-gray-800">{currentUser?.username || 'Admin'}</div>
+                  <div className="text-xs text-gray-500 truncate max-w-[180px]">{currentUser?.email}</div>
                 </div>
                 <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
                   <FaUserCircle className="text-2xl text-blue-600" />

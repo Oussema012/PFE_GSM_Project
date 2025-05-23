@@ -27,7 +27,7 @@ exports.createAlert = async (req, res) => {
     });
 
     await alert.save();
-    const populatedAlert = await Alert.findById(alert._id).populate('siteId', 'site_reference name location');
+    const populatedAlert = await Alert.findById(alert._id).populate('siteId', 'site_reference name location').lean();
     res.status(201).json(populatedAlert);
   } catch (error) {
     console.error('Error creating alert:', error);
@@ -35,14 +35,17 @@ exports.createAlert = async (req, res) => {
   }
 };
 
-// Get all alerts
+// Get active alerts (all sites)
 exports.getAllAlerts = async (req, res) => {
   try {
-    const alerts = await Alert.find().lean();
+    const alerts = await Alert.find({ status: 'active' })
+      .populate('siteId', 'site_reference name location')
+      .sort({ createdAt: -1 })
+      .lean();
     res.status(200).json(alerts);
   } catch (error) {
-    console.error('Error fetching alerts:', error);
-    res.status(500).json({ message: 'Error fetching alerts', error: error.message });
+    console.error('Error fetching active alerts:', error);
+    res.status(500).json({ message: 'Error fetching active alerts', error: error.message });
   }
 };
 
@@ -64,6 +67,7 @@ exports.getActiveAlertsBySite = async (req, res) => {
 
     const alerts = await Alert.find({ siteId, status: 'active' })
       .populate('siteId', 'site_reference name location')
+      .sort({ createdAt: -1 })
       .lean();
     res.status(200).json(alerts);
   } catch (error) {
@@ -95,7 +99,7 @@ exports.resolveAlert = async (req, res) => {
     alert.resolvedAt = new Date();
     await alert.save();
 
-    const populatedAlert = await Alert.findById(id).populate('siteId', 'site_reference name location');
+    const populatedAlert = await Alert.findById(id).populate('siteId', 'site_reference name location').lean();
     res.status(200).json({ message: 'Alert resolved successfully', alert: populatedAlert });
   } catch (error) {
     console.error('Error resolving alert:', error);
@@ -199,6 +203,7 @@ exports.deleteAlert = async (req, res) => {
 exports.getAlertHistory = async (req, res) => {
   try {
     const { siteId } = req.params;
+    const { startDate, endDate } = req.query;
 
     // Validate siteId
     if (!mongoose.Types.ObjectId.isValid(siteId)) {
@@ -211,7 +216,14 @@ exports.getAlertHistory = async (req, res) => {
       return res.status(404).json({ message: 'Site not found' });
     }
 
-    const alerts = await Alert.find({ siteId })
+    const filter = { siteId };
+
+    // Add date range filter if provided
+    if (startDate && endDate) {
+      filter.createdAt = { $gte: new Date(startDate), $lte: new Date(endDate) };
+    }
+
+    const alerts = await Alert.find(filter)
       .populate('siteId', 'site_reference name location')
       .sort({ createdAt: -1 })
       .lean();
@@ -240,6 +252,7 @@ exports.getResolvedAlerts = async (req, res) => {
 
     const alerts = await Alert.find({ siteId, status: 'resolved' })
       .populate('siteId', 'site_reference name location')
+      .sort({ resolvedAt: -1 })
       .lean();
     res.status(200).json(alerts);
   } catch (error) {
@@ -248,11 +261,19 @@ exports.getResolvedAlerts = async (req, res) => {
   }
 };
 
-// Get all resolved alerts
+// Get all resolved alerts (across all sites)
 exports.getAllResolvedAlerts = async (req, res) => {
   try {
-    const alerts = await Alert.find({ status: 'resolved' })
+    const { startDate, endDate } = req.query;
+    const filter = { status: 'resolved' };
+
+    if (startDate && endDate) {
+      filter.resolvedAt = { $gte: new Date(startDate), $lte: new Date(endDate) };
+    }
+
+    const alerts = await Alert.find(filter)
       .populate('siteId', 'site_reference name location')
+      .sort({ resolvedAt: -1 })
       .lean();
     res.status(200).json(alerts);
   } catch (error) {
@@ -284,10 +305,31 @@ exports.acknowledgeAlert = async (req, res) => {
     alert.acknowledgedAt = new Date();
     await alert.save();
 
-    const populatedAlert = await Alert.findById(id).populate('siteId', 'site_reference name location');
+    const populatedAlert = await Alert.findById(id).populate('siteId', 'site_reference name location').lean();
     res.status(200).json({ message: 'Alert acknowledged successfully', alert: populatedAlert });
   } catch (error) {
     console.error('Error acknowledging alert:', error);
     res.status(500).json({ message: 'Error acknowledging alert', error: error.message });
+  }
+};
+
+// Fetch all alerts (active and resolved) across all sites
+exports.getAllAlertsHistory = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const filter = {};
+
+    if (startDate && endDate) {
+      filter.createdAt = { $gte: new Date(startDate), $lte: new Date(endDate) };
+    }
+
+    const alerts = await Alert.find(filter)
+      .populate('siteId', 'site_reference name location')
+      .sort({ createdAt: -1 })
+      .lean();
+    res.status(200).json(alerts);
+  } catch (error) {
+    console.error('Error fetching all alerts history:', error);
+    res.status(500).json({ message: 'Error fetching all alerts history', error: error.message });
   }
 };

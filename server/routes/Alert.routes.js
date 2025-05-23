@@ -13,7 +13,7 @@ router.get('/active/:siteId', AlertController.getActiveAlertsBySite);
 
 // PUT /api/alerts/resolve/:id → resolve an alert by ID
 router.put('/resolve/:id', AlertController.resolveAlert);
-
+router.put('/:id/resolve', AlertController.resolveAlert);
 // DELETE /api/alerts/:id → delete an alert by ID
 router.delete('/:id', AlertController.deleteAlert);
 
@@ -34,5 +34,8 @@ router.put('/resolve-by-type', AlertController.resolveAlertByType);
 
 // PUT /api/alerts/acknowledge/:id → acknowledge an alert by ID
 router.put('/acknowledge/:id', AlertController.acknowledgeAlert);
+router.put('/:id/acknowledge', AlertController.acknowledgeAlert);
+// New route for all alerts history (no siteId)
+router.get('/history', AlertController.getAllAlertsHistory);
 
 module.exports = router;

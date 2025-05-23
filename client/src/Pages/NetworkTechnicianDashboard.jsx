@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
+import { useSelector, useDispatch } from "react-redux";
 import { 
   FaTachometerAlt, 
   FaServer,
@@ -11,9 +12,10 @@ import {
   FaUserCircle,
   FaSearch,
   FaBell,
-  FaNetworkWired,
-  FaClock
+  FaNetworkWired
 } from "react-icons/fa";
+import { signoutSuccess } from '../redux/user/userSlice';
+import axios from 'axios';
 
 // Import components
 import NetworkHealthDashboard from "../components/NetworkTechnician/NetworkHealthDashboard";
@@ -26,7 +28,9 @@ import TechToolbox from "../components/NetworkTechnician/TechToolbox";
 const NetworkTechnicianDashboard = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const dispatch = useDispatch();
   const [activeTab, setActiveTab] = useState('health');
+  const { currentUser } = useSelector((state) => state.user);
   
   useEffect(() => {
     const urlParams = new URLSearchParams(location.search);
@@ -53,7 +57,15 @@ const NetworkTechnicianDashboard = () => {
     { id: 3, device: "Firewall-01", event: "DDoS mitigation activated", time: "42 mins ago", severity: "medium" }
   ];
 
-  const username = 'NetworkTechnician';
+  const handleSignOut = async () => {
+    try {
+      await axios.post('http://localhost:3000/signout');
+      dispatch(signoutSuccess());
+      navigate('/signin');
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
 
   return (
     <div className="flex min-h-screen bg-gradient-to-br from-purple-50 to-purple-100">
@@ -66,7 +78,8 @@ const NetworkTechnicianDashboard = () => {
             <h1 className="text-xl font-bold">Network Command</h1>
           </div>
           <div className="mt-4 text-sm text-purple-300">
-            Technician: <span className="font-medium text-white">{username}</span>
+            <div className="font-medium text-white">{currentUser?.username || 'Network Technician'}</div>
+            <div className="text-xs truncate mt-1">{currentUser?.email}</div>
           </div>
         </div>
         
@@ -171,10 +184,11 @@ const NetworkTechnicianDashboard = () => {
         {/* Sidebar Footer */}
         <div className="p-4 border-t border-purple-700">
           <button 
+            onClick={handleSignOut}
             className="flex items-center w-full px-4 py-2 text-sm text-purple-200 hover:text-white rounded-lg hover:bg-purple-700/50 transition-all"
           >
             <FaSignOutAlt className="mr-3" />
-            Secure Logout
+             Logout
           </button>
         </div>
       </div>
@@ -215,8 +229,8 @@ const NetworkTechnicianDashboard = () => {
               
               <div className="flex items-center space-x-2">
                 <div className="text-right hidden md:block">
-                  <div className="font-medium text-gray-800">{username}</div>
-                  <div className="text-xs text-purple-600">Senior Network Technician</div>
+                  <div className="font-medium text-gray-800">{currentUser?.username || 'Network Technician'}</div>
+                  <div className="text-xs text-purple-600 truncate max-w-[180px]">{currentUser?.email}</div>
                 </div>
                 <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-100 to-purple-200 flex items-center justify-center border border-purple-200">
                   <FaUserCircle className="text-xl text-purple-700" />
