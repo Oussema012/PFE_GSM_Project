@@ -19,7 +19,7 @@ import axios from 'axios';
 
 // Import components
 import NetworkHealthDashboard from "../components/NetworkTechnician/NetworkHealthDashboard";
-import DeviceCommandCenter from "../components/NetworkTechnician/DeviceCommandCenter";
+import InterventionsTech from "../components/NetworkTechnician/InterventionsTech";
 import LiveTopologyViewer from "../components/NetworkTechnician/LiveTopologyViewer";
 import TrafficAnalyzer from "../components/NetworkTechnician/TrafficAnalyzer";
 import AlertWarRoom from "../components/NetworkTechnician/AlertWarRoom";
@@ -106,15 +106,15 @@ const NetworkTechnicianDashboard = () => {
             </li>
             <li>
               <Link 
-                to="/technician-dashboard?tab=command" 
+                to="/technician-dashboard?tab=intervention" 
                 className={`flex items-center px-4 py-3 rounded-lg transition-all ${
-                  activeTab === 'command' 
+                  activeTab === 'intervention' 
                     ? 'bg-purple-700 text-white shadow-md' 
                     : 'hover:bg-purple-700/50 hover:text-white'
                 }`}
               >
                 <FaServer className="mr-3 text-purple-300" />
-                Device Command
+                Interventions
                 <span className="ml-auto bg-purple-600/90 text-xs font-semibold px-2 py-1 rounded-full">
                   {networkMetrics.totalNodes}
                 </span>
@@ -243,7 +243,7 @@ const NetworkTechnicianDashboard = () => {
         {/* Dashboard Content */}
         <main className="flex-1 overflow-y-auto p-6 bg-gradient-to-br from-white/90 to-purple-50/90">
           {activeTab === 'health' && <NetworkHealthDashboard metrics={networkMetrics} incidents={recentIncidents} />}
-          {activeTab === 'command' && <DeviceCommandCenter />}
+          {activeTab === 'intervention' && <InterventionsTech />}
           {activeTab === 'topologyViewer' && <LiveTopologyViewer />}
           {activeTab === 'trafficAnalyzer' && <TrafficAnalyzer />}
           {activeTab === 'AlertWarRoom' && <AlertWarRoom />}

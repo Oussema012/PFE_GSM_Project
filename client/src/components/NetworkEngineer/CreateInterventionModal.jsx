@@ -1,10 +1,13 @@
+
 import React, { useState, useEffect } from 'react';
+import { useSelector } from 'react-redux';
 import PropTypes from 'prop-types';
 
 // Validate Site ID format (e.g., "SITE001")
 const isValidSiteId = (id) => /^SITE\d+$/.test(id);
 
 const CreateInterventionModal = ({ onClose, onSubmit, isScheduling = false, initialData = {} }) => {
+  const currentUser = useSelector((state) => state.user?.currentUser);
   const [formData, setFormData] = useState({
     siteId: initialData.siteId || '',
     description: initialData.description || '',
@@ -12,7 +15,6 @@ const CreateInterventionModal = ({ onClose, onSubmit, isScheduling = false, init
     timeSlotStart: initialData.timeSlot?.start || '',
     timeSlotEnd: initialData.timeSlot?.end || '',
     technician: initialData.technician || '',
-    team: initialData.team?.join(', ') || '',
     priority: initialData.priority || 'medium',
   });
   const [error, setError] = useState('');
@@ -49,40 +51,44 @@ const CreateInterventionModal = ({ onClose, onSubmit, isScheduling = false, init
     setError('');
   };
 
- const handleSubmit = () => {
-  if (!formData.siteId || !isValidSiteId(formData.siteId)) {
-    setError('Valid Site ID (e.g., SITE001) is required.');
-    return;
-  }
-  if (!formData.description) {
-    setError('Description is required.');
-    return;
-  }
-  if (!formData.plannedDate) {
-    setError('Planned date is required.');
-    return;
-  }
-  if (!formData.technician) {
-    setError('Technician is required.');
-    return;
-  }
-  if (isScheduling && (!formData.timeSlotStart || !formData.timeSlotEnd)) {
-    setError('Start and end times are required for scheduling.');
-    return;
-  }
+  const handleSubmit = () => {
+    if (!formData.siteId || !isValidSiteId(formData.siteId)) {
+      setError('Valid Site ID (e.g., SITE001) is required.');
+      return;
+    }
+    if (!formData.description) {
+      setError('Description is required.');
+      return;
+    }
+    if (!formData.plannedDate) {
+      setError('Planned date is required.');
+      return;
+    }
+    if (!formData.technician) {
+      setError('Technician is required.');
+      return;
+    }
+    if (isScheduling && (!formData.timeSlotStart || !formData.timeSlotEnd)) {
+      setError('Start and end times are required for scheduling.');
+      return;
+    }
+    if (!currentUser?._id) {
+      setError('User not authenticated.');
+      return;
+    }
 
-  const payload = {
-    siteId: formData.siteId,
-    description: formData.description,
-    plannedDate: new Date(formData.plannedDate).toISOString(),
-    timeSlot: isScheduling ? { start: formData.timeSlotStart, end: formData.timeSlotEnd } : undefined,
-    technician: formData.technician,
-    team: formData.team ? formData.team.split(',').map((t) => t.trim()).filter(Boolean) : undefined,
-    priority: formData.priority,
+    const payload = {
+      siteId: formData.siteId,
+      description: formData.description,
+      plannedDate: new Date(formData.plannedDate).toISOString(),
+      timeSlot: isScheduling ? { start: formData.timeSlotStart, end: formData.timeSlotEnd } : undefined,
+      technician: formData.technician,
+      createdBy: currentUser._id, // Use current user's ID
+      priority: formData.priority,
+    };
+
+    onSubmit(payload);
   };
-
-  onSubmit(payload);
-};
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -93,7 +99,9 @@ const CreateInterventionModal = ({ onClose, onSubmit, isScheduling = false, init
         )}
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700">Site ID</label>
+            <label className="block text-sm
+
+ font-medium text-gray-700">Site ID</label>
             <input
               name="siteId"
               value={formData.siteId}
@@ -150,30 +158,20 @@ const CreateInterventionModal = ({ onClose, onSubmit, isScheduling = false, init
           <div>
             <label className="block text-sm font-medium text-gray-700">Technician</label>
             <select
-  name="technician"
-  value={formData.technician}
-  onChange={handleChange}
-  className="mt-1 w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
-  disabled={loading}
->
-  <option value="">Select a technician</option>
-  {technicians.map((tech) => (
-    <option key={tech._id} value={tech._id}> {/* Use tech._id instead of tech.name */}
-      {tech.name}
-    </option>
-  ))}
-</select>
-            {loading && <p className="text-sm text-gray-500 mt-1">Loading technicians...</p>}
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Team (comma-separated)</label>
-            <input
-              name="team"
-              value={formData.team}
+              name="technician"
+              value={formData.technician}
               onChange={handleChange}
               className="mt-1 w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
-              placeholder="e.g., John Doe, Jane Smith"
-            />
+              disabled={loading}
+            >
+              <option value="">Select a technician</option>
+              {technicians.map((tech) => (
+                <option key={tech._id} value={tech._id}>
+                  {tech.name}
+                </option>
+              ))}
+            </select>
+            {loading && <p className="text-sm text-gray-500 mt-1">Loading technicians...</p>}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700">Priority</label>

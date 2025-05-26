@@ -14,8 +14,13 @@ const interventionSchema = new Schema({
   ref: 'User',
   required: true
 },
- // Or use an array for team
-  team: [{ type: String }],     // List of team members (usernames or IDs)
+
+  createdBy: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'User',
+  required: true
+},   
+
   priority: {
     type: String,
     enum: ['low', 'medium', 'high'],

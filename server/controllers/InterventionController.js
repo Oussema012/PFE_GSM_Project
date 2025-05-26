@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const Intervention = require('../models/Intervention');
-const User = require('../models/User'); // Make sure you have this
+const User = require('../models/User');
 
 // Helper to check required fields
 const checkRequired = (fields, res) => {
@@ -16,28 +16,278 @@ const checkRequired = (fields, res) => {
 // Create a new intervention
 exports.createIntervention = async (req, res) => {
   try {
-    const { siteId, description, plannedDate } = req.body;
-    if (!checkRequired({ siteId, description, plannedDate }, res)) return;
+    const {
+      siteId,
+      description,
+      plannedDate,
+      timeSlot,
+      technician,
+      createdBy,
+      priority,
+      status,
+      resolutionNotes,
+      resolvedAt,
+      validatedBy
+    } = req.body;
 
-    const intervention = new Intervention(req.body);
+    // Basic input validation
+    if (!siteId || !description || !plannedDate || !technician || !createdBy) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: siteId, description, plannedDate, technician, and createdBy are required'
+      });
+    }
+
+    // Validate timeSlot format if provided
+    if (timeSlot) {
+      if (!timeSlot.start || !timeSlot.end) {
+        return res.status(400).json({
+          success: false,
+          message: 'Both start and end times are required for timeSlot'
+        });
+      }
+      // Basic time format validation (HH:mm)
+      const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+      if (!timeRegex.test(timeSlot.start) || !timeRegex.test(timeSlot.end)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid time format in timeSlot. Use HH:mm format'
+        });
+      }
+    }
+
+    // Validate priority if provided
+    if (priority && !['low', 'medium', 'high'].includes(priority)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid priority value. Must be low, medium, or high'
+      });
+    }
+
+    // Validate status if provided
+    if (status && !['planned', 'in-progress', 'completed', 'cancelled'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid status value. Must be planned, in-progress, completed, or cancelled'
+      });
+    }
+
+    // Create new intervention
+    const intervention = new Intervention({
+      siteId,
+      description,
+      plannedDate: new Date(plannedDate),
+      timeSlot,
+      technician,
+      createdBy,
+      priority,
+      status,
+      resolutionNotes,
+      resolvedAt: resolvedAt ? new Date(resolvedAt) : undefined,
+      validatedBy,
+      createdAt: new Date()
+    });
+
+    // Save intervention to database
     await intervention.save();
-    res.status(201).json(intervention);
+
+    res.status(201).json({
+      success: true,
+      message: 'Intervention created successfully',
+      data: intervention
+    });
+
   } catch (error) {
     console.error('Error creating intervention:', error);
-    res.status(500).json({ message: 'Error creating intervention', error: error.message });
+    res.status(500).json({
+      success: false,
+      message: 'Error creating intervention',
+      error: error.message
+    });
   }
 };
 
+// Get interventions by creator
+exports.getInterventionsByCreator = async (req, res) => {
+  try {
+    const { createdBy } = req.query;
+
+    // Validate createdBy
+    if (!createdBy) {
+      return res.status(400).json({
+        success: false,
+        message: 'createdBy parameter is required'
+      });
+    }
+
+    // Validate ObjectId format
+    if (!mongoose.isValidObjectId(createdBy)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid createdBy ID format'
+      });
+    }
+
+    // Find interventions by createdBy
+    const interventions = await Intervention.find({ createdBy })
+      .populate('technician', 'name email')
+      .populate('createdBy', 'name email');
+
+    if (interventions.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No interventions found for this creator'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Interventions retrieved successfully',
+      data: interventions
+    });
+
+  } catch (error) {
+    console.error('Error retrieving interventions:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error retrieving interventions',
+      error: error.message
+    });
+  }
+};
+// Get interventions by technician
+exports.getInterventionsByTechnician = async (req, res) => {
+  try {
+    const { technician } = req.query;
+
+    // Validate technician
+    if (!technician) {
+      return res.status(400).json({
+        success: false,
+        message: 'technician parameter is required'
+      });
+    }
+
+    // Validate ObjectId format
+    if (!mongoose.isValidObjectId(technician)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid technician ID format'
+      });
+    }
+
+    // Find interventions by technician
+    const interventions = await Intervention.find({ technician })
+      .populate('technician', 'name email')
+      .populate('createdBy', 'name email');
+
+    if (interventions.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No interventions found for this technician'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Interventions retrieved successfully',
+      data: interventions
+    });
+
+  } catch (error) {
+    console.error('Error retrieving interventions by technician:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error retrieving interventions',
+      error: error.message
+    });
+  }
+};
+// Update intervention status
+exports.updateInterventionStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    // Validate intervention ID
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid intervention ID format'
+      });
+    }
+
+    // Validate status
+    if (!status) {
+      return res.status(400).json({
+        success: false,
+        message: 'Status is required'
+      });
+    }
+
+    if (!['planned', 'in-progress', 'completed', 'cancelled'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid status value. Must be planned, in-progress, completed, or cancelled'
+      });
+    }
+
+    // Find and update intervention
+    const updateData = {
+      status,
+      ...(status === 'completed' ? { resolvedAt: new Date() } : {}),
+    };
+
+    const intervention = await Intervention.findByIdAndUpdate(
+      id,
+      updateData,
+      { new: true, runValidators: true }
+    )
+      .populate('technician', 'name email')
+      .populate('createdBy', 'name email');
+
+    if (!intervention) {
+      return res.status(404).json({
+        success: false,
+        message: 'Intervention not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Intervention status updated successfully',
+      data: intervention
+    });
+
+  } catch (error) {
+    console.error('Error updating intervention status:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error updating intervention status',
+      error: error.message
+    });
+  }
+};
 // Resolve an intervention
 exports.resolveIntervention = async (req, res) => {
   try {
-    const { resolutionNotes, validatedBy } = req.body;
     const { id } = req.params;
+    const { resolutionNotes, validatedBy } = req.body;
 
+    // Validate intervention ID
     if (!mongoose.isValidObjectId(id)) {
-      return res.status(400).json({ message: 'Invalid intervention ID' });
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid intervention ID format'
+      });
     }
 
+    // Validate required fields
+    if (!checkRequired({ resolutionNotes, validatedBy }, res)) {
+      return;
+    }
+
+    // Find and update intervention
     const intervention = await Intervention.findByIdAndUpdate(
       id,
       {
@@ -46,17 +296,120 @@ exports.resolveIntervention = async (req, res) => {
         validatedBy,
         resolvedAt: new Date(),
       },
-      { new: true }
-    );
+      { new: true, runValidators: true }
+    )
+      .populate('technician', 'name email')
+      .populate('createdBy', 'name email');
 
-    if (!intervention) return res.status(404).json({ message: 'Intervention not found' });
+    if (!intervention) {
+      return res.status(404).json({
+        success: false,
+        message: 'Intervention not found'
+      });
+    }
 
-    res.json(intervention);
+    res.status(200).json({
+      success: true,
+      message: 'Intervention resolved successfully',
+      data: intervention
+    });
+
   } catch (error) {
     console.error('Error resolving intervention:', error);
-    res.status(500).json({ message: 'Error resolving intervention', error: error.message });
+    res.status(500).json({
+      success: false,
+      message: 'Error resolving intervention',
+      error: error.message
+    });
   }
 };
+// Delete an intervention
+exports.deleteIntervention = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Validate intervention ID
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid intervention ID format'
+      });
+    }
+
+    // Find and delete intervention
+    const intervention = await Intervention.findByIdAndDelete(id);
+
+    if (!intervention) {
+      return res.status(404).json({
+        success: false,
+        message: 'Intervention not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Intervention deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting intervention:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting intervention',
+      error: error.message
+    });
+  }
+};
+// Get intervention by ID
+exports.getInterventionById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Validate intervention ID
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid intervention ID format',
+      });
+    }
+
+    // Find intervention by ID
+    const intervention = await Intervention.findById(id)
+      .populate('technician', 'name email')
+      .populate('createdBy', 'name email');
+
+    if (!intervention) {
+      return res.status(404).json({
+        success: false,
+        message: 'Intervention not found',
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Intervention retrieved successfully',
+      data: intervention,
+    });
+  } catch (error) {
+    console.error('Error retrieving intervention:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error retrieving intervention',
+      error: error.message,
+    });
+  }
+};
+
+
+
+
+
+
+
+
+
+
+
+
 
 // Get all interventions for a site
 exports.getInterventionsBySite = async (req, res) => {
@@ -72,63 +425,8 @@ exports.getInterventionsBySite = async (req, res) => {
   }
 };
 
-// Get intervention by ID
-exports.getInterventionById = async (req, res) => {
-  try {
-    const { id } = req.params;
-    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ message: 'Invalid ID' });
 
-    const intervention = await Intervention.findById(id);
-    if (!intervention) return res.status(404).json({ message: 'Intervention not found' });
 
-    res.json(intervention);
-  } catch (error) {
-    console.error('Error retrieving intervention:', error);
-    res.status(500).json({ message: 'Error retrieving intervention', error: error.message });
-  }
-};
-
-// Update intervention status or notes
-exports.updateInterventionStatus = async (req, res) => {
-  try {
-    const { status, notes } = req.body;
-    const { id } = req.params;
-
-    if (!status && !notes)
-      return res.status(400).json({ message: 'At least one of status or notes is required' });
-
-    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ message: 'Invalid ID' });
-
-    const intervention = await Intervention.findByIdAndUpdate(
-      id,
-      { ...(status && { status }), ...(notes && { notes }) },
-      { new: true }
-    );
-
-    if (!intervention) return res.status(404).json({ message: 'Intervention not found' });
-
-    res.json(intervention);
-  } catch (error) {
-    console.error('Error updating intervention status:', error);
-    res.status(500).json({ message: 'Error updating status', error: error.message });
-  }
-};
-
-// Delete intervention
-exports.deleteIntervention = async (req, res) => {
-  try {
-    const { id } = req.params;
-    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ message: 'Invalid ID' });
-
-    const intervention = await Intervention.findByIdAndDelete(id);
-    if (!intervention) return res.status(404).json({ message: 'Intervention not found' });
-
-    res.json({ message: 'Intervention deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting intervention:', error);
-    res.status(500).json({ message: 'Error deleting intervention', error: error.message });
-  }
-};
 
 // Get completed interventions (history)
 exports.getCompletedInterventions = async (req, res) => {
@@ -178,32 +476,7 @@ exports.scheduleIntervention = async (req, res) => {
   }
 };
 
-// Get interventions by technician with filters
-exports.getInterventionsByTechnician = async (req, res) => {
-  try {
-    const { technicianId, status, priority, dateFrom, dateTo } = req.query;
 
-    if (!technicianId || technicianId === 'null') {
-      return res.status(400).json({ message: 'Valid technicianId is required' });
-    }
-
-    const query = { technicianId: String(technicianId) };
-    if (status) query.status = status;
-    if (priority) query.priority = priority;
-
-    if (dateFrom || dateTo) {
-      query.plannedDate = {};
-      if (dateFrom) query.plannedDate.$gte = new Date(dateFrom);
-      if (dateTo) query.plannedDate.$lte = new Date(dateTo);
-    }
-
-    const interventions = await Intervention.find(query).sort({ plannedDate: 1 });
-    res.json(interventions);
-  } catch (error) {
-    console.error('Error fetching interventions by technician:', error);
-    res.status(500).json({ message: 'Error fetching interventions', error: error.message });
-  }
-};
 
 // Upload intervention images
 exports.uploadImages = async (req, res) => {

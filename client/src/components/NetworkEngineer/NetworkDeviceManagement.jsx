@@ -1,20 +1,26 @@
-
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import ViewSite from './ViewSiteDetails';
+
+// Validate MongoDB ObjectId (24-character hex string)
+const isValidObjectId = (id) => /^[0-9a-fA-F]{24}$/.test(id);
 
 const NetworkDeviceManagement = () => {
   const [sites, setSites] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [currentSite, setCurrentSite] = useState(null);
+  const [equipmentData, setEquipmentData] = useState({}); // Store equipment for each site
+  const [error, setError] = useState('');
 
   useEffect(() => {
     fetchSites();
   }, []);
 
+  // Fetch sites and their equipment
   const fetchSites = async () => {
     setLoading(true);
+    setError('');
     try {
       const response = await axios.get('/api/sites');
       const normalizedSites = response.data.map((site) => ({
@@ -23,8 +29,30 @@ const NetworkDeviceManagement = () => {
         technology: Array.isArray(site.technology) ? site.technology : [],
       }));
       setSites(normalizedSites);
+
+      // Fetch equipment for each site
+      const equipmentPromises = normalizedSites.map(async (site) => {
+        if (!isValidObjectId(site._id)) {
+          console.warn(`Invalid site ID format for site ${site.name}: ${site._id}`);
+          return { siteId: site._id, equipment: [] };
+        }
+        try {
+          const equipmentResponse = await axios.get(`http://localhost:3000/api/equipment/${site._id}`);
+          return { siteId: site._id, equipment: equipmentResponse.data };
+        } catch (err) {
+          console.error(`Failed to fetch equipment for site ${site._id}:`, err.message);
+          return { siteId: site._id, equipment: [] };
+        }
+      });
+
+      const equipmentResults = await Promise.all(equipmentPromises);
+      const equipmentMap = equipmentResults.reduce((acc, { siteId, equipment }) => {
+        acc[siteId] = equipment;
+        return acc;
+      }, {});
+      setEquipmentData(equipmentMap);
     } catch (error) {
-      alert(`Failed to fetch sites: ${error.message}`);
+      setError(`Failed to fetch sites: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -60,6 +88,26 @@ const NetworkDeviceManagement = () => {
         <h1 className="text-2xl font-bold text-gray-800">Network Device Management</h1>
       </div>
 
+      {/* Error Message */}
+      {error && (
+        <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-400 rounded">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Sites Table */}
       <div className="bg-white shadow-md rounded-lg overflow-hidden">
         {loading ? (
@@ -71,7 +119,6 @@ const NetworkDeviceManagement = () => {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Name
                   </th>
@@ -88,6 +135,9 @@ const NetworkDeviceManagement = () => {
                     Power
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Equipment
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
@@ -95,7 +145,6 @@ const NetworkDeviceManagement = () => {
               <tbody className="bg-white divide-y divide-gray-200">
                 {sites.map((site) => (
                   <tr key={site._id} className="hover:bg-gray-50">
-                    
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {site.name || 'N/A'}
                     </td>
@@ -131,6 +180,31 @@ const NetworkDeviceManagement = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {site.power_status ? `${site.power_status} (${site.battery_level}%)` : 'N/A'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <div className="flex flex-wrap gap-2">
+                        {equipmentData[site._id]?.length > 0 ? (
+                          equipmentData[site._id].map((eq) => (
+                            <div key={eq._id} className="flex items-center">
+                              <span
+                                className={`inline-block w-3 h-3 rounded-full mr-1 ${
+                                  eq.status === 'operational'
+                                    ? 'bg-green-500'
+                                    : eq.status === 'faulty'
+                                    ? 'bg-red-500'
+                                    : eq.status === 'maintenance'
+                                    ? 'bg-yellow-500'
+                                    : 'bg-gray-500'
+                                }`}
+                                title={`Equipment: ${eq.name} (Status: ${eq.status})`}
+                              ></span>
+                              <span>{eq.name}</span>
+                            </div>
+                          ))
+                        ) : (
+                          <span>N/A</span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">

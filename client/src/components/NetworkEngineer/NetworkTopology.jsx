@@ -1,11 +1,10 @@
-// NetworkTopology.jsx
 import React, { useState, useEffect, useCallback } from 'react';
-import CreateInterventionModal from './CreateInterventionModal';
+import { useSelector } from 'react-redux';
 import ScheduleIntervention from './ScheduleIntervention';
 import InterventionModal from './InterventionModal';
 import downloadCSV from './exportCSV';
-import ResolveInterventionModal from './ResolveInterventionModal'; // Extracted below
-import UpdateStatusModal from './UpdateStatusModal'; // Extracted below
+import ResolveInterventionModal from './ResolveInterventionModal';
+import UpdateStatusModal from './UpdateStatusModal';
 
 // API base URL
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -24,7 +23,6 @@ const apiFetch = async (url, options = {}) => {
     headers: {
       'Content-Type': 'application/json',
       ...options.headers,
-      
     },
   });
   if (!response.ok) {
@@ -81,45 +79,139 @@ const NetworkTopology = () => {
   const [showResolveModal, setShowResolveModal] = useState(null);
   const [showUpdateStatusModal, setShowUpdateStatusModal] = useState(null);
 
-  // Fetch all interventions
+  // Get current user from Redux store
+  const currentUser = useSelector((state) => state.user?.currentUser);
+
+  // Fetch interventions for the current user
   const fetchInterventions = useCallback(async () => {
+    if (!currentUser?._id || !isValidObjectId(currentUser._id)) {
+      setError('No valid user logged in');
+      setInterventions([]);
+      setFilteredInterventions([]);
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     try {
-      const data = await apiFetch(`${API_URL}/api/interventions/history/interventions`);
-      setInterventions(data);
-      setFilteredInterventions(data);
+      const response = await apiFetch(
+        `${API_URL}/api/interventions?createdBy=${currentUser._id}`
+      );
+      const interventions = response.data || []; // Extract the data array, default to empty array
+      setInterventions(interventions);
+      setFilteredInterventions(interventions);
       setError(null);
     } catch (error) {
-      setError(error.message);
+      setError(error.message || 'Failed to fetch interventions');
+      setInterventions([]);
+      setFilteredInterventions([]);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [currentUser]); // Add currentUser to dependencies
 
-  // Create intervention
-  const createIntervention = async (payload) => {
-    try {
-      const data = await apiFetch(`${API_URL}/api/interventions`, {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-      setInterventions((prev) => [...prev, data]);
-      setShowCreateModal(false);
-      setError(null);
-    } catch (error) {
-      setError(error.message);
+  // Fetch data on mount
+  useEffect(() => {
+    fetchInterventions();
+  }, [fetchInterventions]);
+
+  // Apply filters and sorting
+  useEffect(() => {
+    let result = [...interventions];
+
+    // Filter by site name (case-insensitive match or partial match)
+    if (filters.siteId) {
+      result = result.filter((item) =>
+        item.siteId?.toLowerCase().includes(filters.siteId.toLowerCase())
+      );
     }
-    
+
+    if (filters.status) {
+      result = result.filter((item) => item.status === filters.status);
+    }
+
+    if (filters.technician) {
+      result = result.filter((item) =>
+        item.technician?.name?.toLowerCase().includes(filters.technician.toLowerCase())
+      );
+    }
+
+    if (filters.priority) {
+      result = result.filter((item) => item.priority === filters.priority);
+    }
+
+    if (filters.dateFrom) {
+      result = result.filter(
+        (item) => new Date(item.plannedDate) >= new Date(filters.dateFrom)
+      );
+    }
+
+    if (filters.dateTo) {
+      result = result.filter(
+        (item) => new Date(item.plannedDate) <= new Date(filters.dateTo)
+      );
+    }
+
+    if (sortConfig.key) {
+      result.sort((a, b) => {
+        let aValue = a[sortConfig.key];
+        let bValue = b[sortConfig.key];
+
+        if (
+          sortConfig.key === 'plannedDate' ||
+          sortConfig.key === 'createdAt' ||
+          sortConfig.key === 'resolvedAt'
+        ) {
+          aValue = new Date(aValue);
+          bValue = new Date(bValue);
+        } else if (sortConfig.key === 'siteId') {
+          aValue = aValue?.toLowerCase() || '';
+          bValue = bValue?.toLowerCase() || '';
+        } else if (sortConfig.key === 'technician') {
+          aValue = aValue?.name?.toLowerCase() || '';
+          bValue = bValue?.name?.toLowerCase() || '';
+        } else if (sortConfig.key === 'status' || sortConfig.key === 'priority') {
+          aValue = aValue?.toLowerCase() || '';
+          bValue = bValue?.toLowerCase() || '';
+        }
+
+        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    setFilteredInterventions(result);
+  }, [interventions, filters, sortConfig]);
+
+  // Handle filter changes
+  const handleFilterChange = (e) => {
+    const { name, value } = e.target;
+    setFilters((prev) => ({ ...prev, [name]: value }));
+    setError(null);
+  };
+
+  // Handle sort
+  const handleSort = (key) => {
+    setSortConfig((prev) => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc',
+    }));
+  };
+
+  // Handle export to CSV
+  const handleExportCSV = () => {
+    downloadCSV(filteredInterventions);
   };
 
   // Schedule intervention
   const scheduleIntervention = async (payload) => {
     try {
-      const data = await apiFetch(`${API_URL}/api/interventions/schedule`, {
+      const data = await apiFetch(`${API_URL}/api/interventions`, {
         method: 'POST',
         body: JSON.stringify(payload),
       });
-      setInterventions((prev) => [...prev, data]);
+      setInterventions((prev) => [...prev, data.data]);
       setShowScheduleModal(false);
       setError(null);
     } catch (error) {
@@ -135,7 +227,7 @@ const NetworkTopology = () => {
         body: JSON.stringify(payload),
       });
       setInterventions((prev) =>
-        prev.map((item) => (item._id === interventionId ? data : item))
+        prev.map((item) => (item._id === interventionId ? data.data : item))
       );
       setShowResolveModal(null);
       setError(null);
@@ -152,7 +244,7 @@ const NetworkTopology = () => {
         body: JSON.stringify({ status }),
       });
       setInterventions((prev) =>
-        prev.map((item) => (item._id === interventionId ? data : item))
+        prev.map((item) => (item._id === interventionId ? data.data : item))
       );
       setShowUpdateStatusModal(null);
       setShowResolveModal(null);
@@ -177,101 +269,6 @@ const NetworkTopology = () => {
     }
   };
 
-  // Apply filters and sorting
-// Apply filters and sorting
-useEffect(() => {
-  let result = [...interventions];
-
-  // Filter by site name (case-insensitive match or partial match)
-  if (filters.siteId) {
-    result = result.filter((item) =>
-      item.siteId?.toLowerCase().includes(filters.siteId.toLowerCase())
-    );
-  }
-
-  if (filters.status) {
-    result = result.filter((item) => item.status === filters.status);
-  }
-
-  if (filters.technician) {
-    result = result.filter((item) =>
-      item.technician?.toLowerCase().includes(filters.technician.toLowerCase())
-    );
-  }
-
-  if (filters.priority) {
-    result = result.filter((item) => item.priority === filters.priority);
-  }
-
-  if (filters.dateFrom) {
-    result = result.filter(
-      (item) => new Date(item.plannedDate) >= new Date(filters.dateFrom)
-    );
-  }
-
-  if (filters.dateTo) {
-    result = result.filter(
-      (item) => new Date(item.plannedDate) <= new Date(filters.dateTo)
-    );
-  }
-
-  if (sortConfig.key) {
-    result.sort((a, b) => {
-      let aValue = a[sortConfig.key];
-      let bValue = b[sortConfig.key];
-
-      if (
-        sortConfig.key === 'plannedDate' ||
-        sortConfig.key === 'createdAt' ||
-        sortConfig.key === 'resolvedAt'
-      ) {
-        aValue = new Date(aValue);
-        bValue = new Date(bValue);
-      } else if (
-        sortConfig.key === 'siteId' ||
-        sortConfig.key === 'technician' ||
-        sortConfig.key === 'status' ||
-        sortConfig.key === 'priority'
-      ) {
-        aValue = aValue?.toLowerCase() || '';
-        bValue = bValue?.toLowerCase() || '';
-      }
-
-      if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
-      if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
-      return 0;
-    });
-  }
-
-  setError(null); // clear any previous errors
-  setFilteredInterventions(result);
-}, [interventions, filters, sortConfig]);
-
-  // Fetch data on mount
-  useEffect(() => {
-    fetchInterventions();
-  }, [fetchInterventions]);
-
-  // Handle filter changes
-  const handleFilterChange = (e) => {
-    const { name, value } = e.target;
-    setFilters((prev) => ({ ...prev, [name]: value }));
-    setError(null);
-  };
-
-  // Handle sort
-  const handleSort = (key) => {
-    setSortConfig((prev) => ({
-      key,
-      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc',
-    }));
-  };
-
-  // Handle export to CSV
-  const handleExportCSV = () => {
-    downloadCSV(filteredInterventions);
-  };
-
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
       <header className="flex items-center gap-3 mb-6">
@@ -281,12 +278,6 @@ useEffect(() => {
 
       {/* Action Buttons */}
       <div className="mb-6 flex justify-end space-x-3">
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500"
-        >
-          Create Intervention
-        </button>
         <button
           onClick={() => setShowScheduleModal(true)}
           className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500"
@@ -538,7 +529,7 @@ useEffect(() => {
                       {intervention.siteId}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900" style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {intervention.technician || 'N/A'}
+                      {intervention.technician?.name || 'N/A'}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">
                       {new Date(intervention.plannedDate).toLocaleDateString()}
@@ -619,12 +610,6 @@ useEffect(() => {
         <InterventionModal
           intervention={selectedIntervention}
           onClose={() => setSelectedIntervention(null)}
-        />
-      )}
-      {showCreateModal && (
-        <CreateInterventionModal
-          onClose={() => setShowCreateModal(false)}
-          onSubmit={createIntervention}
         />
       )}
       {showScheduleModal && (

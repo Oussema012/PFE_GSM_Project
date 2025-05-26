@@ -19,6 +19,7 @@ import NetworkTopology from "../components/NetworkEngineer/NetworkTopology";
 import NetworkReports from "../components/NetworkEngineer/NetworkReports";
 import NetworkAlerts from "../components/NetworkEngineer/NetworkAlerts";
 import NetworkSettings from "../components/NetworkEngineer/NetworkSettings";
+import Notifications from "../components/NetworkEngineer/Notification";
 
 const NotificationDropdown = ({ onClose }) => {
   const [notifications, setNotifications] = useState([]);
@@ -156,7 +157,7 @@ const NotificationDropdown = ({ onClose }) => {
       </div>
       <div className="p-4 bg-gray-50 text-center">
         <Link
-          to="/notifications"
+          to="/network-dashboard?tab=notifications"
           onClick={onClose}
           className="text-teal-600 hover:text-teal-800 text-sm font-medium"
         >
@@ -244,6 +245,7 @@ const NetworkEngineerDashboard = () => {
               { tab: 'topology', icon: FaProjectDiagram, text: 'Network Topology', badge: null },
               { tab: 'reports', icon: FaChartBar, text: 'Performance Reports', badge: null },
               { tab: 'alerts', icon: FaBell, text: 'Network Alerts', badge: networkStats.networkAlerts },
+              { tab: 'notifications', icon: FaBell, text: 'Notifications', badge: unreadCount },
               { tab: 'tools', icon: FaTools, text: 'Network Tools', badge: null },
             ].map(({ tab, icon: Icon, text, badge }) => (
               <li key={tab}>
@@ -325,6 +327,7 @@ const NetworkEngineerDashboard = () => {
           {activeTab === 'topology' && <NetworkTopology />}
           {activeTab === 'reports' && <NetworkReports />}
           {activeTab === 'alerts' && <NetworkAlerts />}
+          {activeTab === 'notifications' && <Notifications />}
           {activeTab === 'tools' && <NetworkSettings />}
         </main>
       </div>
