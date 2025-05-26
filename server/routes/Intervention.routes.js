@@ -10,13 +10,15 @@ router.put('/:id', InterventionController.updateInterventionStatus);
 router.put('/:id/resolve', InterventionController.resolveIntervention);
 router.delete('/:id', InterventionController.deleteIntervention);
 router.get('/:id', InterventionController.getInterventionById);
+router.get('/site/:siteId', InterventionController.getInterventionsBySite);
+router.get('/completed', InterventionController.getCompletedInterventions);
 
 
 
 
 
 // GET → Get all interventions by siteId
-router.get('/:siteId', InterventionController.getInterventionsBySite);
+//router.get('/:siteId', InterventionController.getInterventionsBySite);
 
 // GET → Get single intervention by ID
 //router.get('/details/:id', InterventionController.getInterventionById);
@@ -28,9 +30,9 @@ router.get('/:siteId', InterventionController.getInterventionsBySite);
 //router.delete('/:id', InterventionController.deleteIntervention);
 
 // GET → Get completed interventions (history)
-router.get('/history/interventions', InterventionController.getCompletedInterventions);
+//router.get('/history/interventions', InterventionController.getCompletedInterventions);
 
 // POST → Schedule an intervention
-router.post('/schedule', InterventionController.scheduleIntervention);
+//router.post('/schedule', InterventionController.scheduleIntervention);
 
 module.exports = router;

@@ -1,72 +1,54 @@
 // exportCSV.js
 
+// Escapes special characters in CSV values to ensure proper formatting
 const escapeCsvValue = (value) => {
   if (value === null || value === undefined || value === '') return 'N/A';
   const str = String(value).trim();
-  // Wrap in quotes if contains special characters
+  // Wrap in quotes if the string contains commas, quotes, or newlines
   if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
-    return `"${str.replace(/"/g, '""')}"`; // escape inner quotes
+    return `"${str.replace(/"/g, '""')}"`; // Escape inner quotes
   }
   return str;
 };
 
+// Formats a date to DD/MM/YYYY or returns 'N/A' if invalid
 const formatDate = (value) => {
   if (!value) return 'N/A';
   try {
     const date = new Date(value);
-    return date.toLocaleDateString('en-GB'); // "DD/MM/YYYY"
+    if (isNaN(date.getTime())) return 'N/A';
+    return date.toLocaleDateString('en-GB'); // e.g., "26/05/2025"
   } catch {
     return 'N/A';
   }
 };
 
+// Generates and downloads a CSV file based on intervention data
 const downloadCSV = (data) => {
-  const headers = [
-    'Site ID',
-    'Description',
-    'Status',
-    'Priority',
-    'Technician',
-    'Team',
-    'Planned Date',
-    'Start Time',
-    'End Time',
-    'Date Created',
-    'Resolution Notes',
-    'Resolved At',
-    'Validated By',
-  ];
+  // Headers matching the table columns in NetworkTopology.jsx
+  const headers = ['Site ID', 'Technician', 'Planned Date', 'Priority', 'Status'];
 
+  // Map data to CSV rows, aligning with table columns
   const rows = data.map((item) => [
     escapeCsvValue(item.siteId),
-    escapeCsvValue(item.description),
-    escapeCsvValue(item.status),
-    escapeCsvValue(item.priority),
-    escapeCsvValue(item.technician),
-    escapeCsvValue(Array.isArray(item.team) && item.team.length ? item.team.join('; ') : 'None'),
+    escapeCsvValue(item.technician?.name), // Use technician.name instead of the object
     escapeCsvValue(formatDate(item.plannedDate)),
-    escapeCsvValue(item.timeSlot?.start || 'N/A'),
-    escapeCsvValue(item.timeSlot?.end || 'N/A'),
-    escapeCsvValue(formatDate(item.createdAt)),
-    escapeCsvValue(item.resolutionNotes),
-    escapeCsvValue(formatDate(item.resolvedAt)),
-    escapeCsvValue(item.validatedBy),
+    escapeCsvValue(item.priority),
+    escapeCsvValue(item.status),
   ]);
 
-  const csvLines = [
-    headers.join(','),         // first row: headers
-    ...rows.map((row) => row.join(',')), // next rows: data
-  ];
+  // Combine headers and rows into CSV content
+  const csvContent = [headers, ...rows].map((row) => row.join(',')).join('\r\n');
 
-  const csvContent = csvLines.join('\r\n'); // ensure each row is a new line
-
+  // Create and trigger download
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
-  link.setAttribute('download', `interventions_${new Date().toISOString().split('T')[0]}.csv`);
+  link.download = `interventions_${new Date().toISOString().split('T')[0]}.csv`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+  URL.revokeObjectURL(link.href); // Clean up URL object
 };
 
 export default downloadCSV;

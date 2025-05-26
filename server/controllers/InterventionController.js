@@ -398,50 +398,113 @@ exports.getInterventionById = async (req, res) => {
     });
   }
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Get all interventions for a site
 exports.getInterventionsBySite = async (req, res) => {
   try {
     const { siteId } = req.params;
-    if (!siteId) return res.status(400).json({ message: 'siteId is required' });
+    const { createdBy } = req.query;
 
-    const interventions = await Intervention.find({ siteId }).sort({ plannedDate: 1 });
-    res.json(interventions);
+    // Validate siteId
+    if (!siteId) {
+      return res.status(400).json({
+        success: false,
+        message: 'siteId parameter is required',
+      });
+    }
+
+    // Validate createdBy if provided
+    if (createdBy && !mongoose.isValidObjectId(createdBy)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid createdBy ID format',
+      });
+    }
+
+    // Build query
+    const query = { siteId };
+    if (createdBy) {
+      query.createdBy = createdBy;
+    }
+
+    // Find interventions
+    const interventions = await Intervention.find(query)
+      .populate('technician', 'name email')
+      .populate('createdBy', 'name email');
+
+    if (interventions.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: 'No interventions found for this site',
+        data: [],
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Interventions for site retrieved successfully',
+      data: interventions,
+    });
   } catch (error) {
     console.error('Error retrieving interventions by site:', error);
-    res.status(500).json({ message: 'Error retrieving interventions', error: error.message });
+    res.status(500).json({
+      success: false,
+      message: 'Error retrieving interventions by site',
+      error: error.message,
+    });
   }
 };
-
-
-
-
-// Get completed interventions (history)
+// Get all completed interventions
 exports.getCompletedInterventions = async (req, res) => {
   try {
-    const { technicianId } = req.query;
-    const query = { status: 'completed' };
-    if (technicianId) query.technicianId = String(technicianId);
+    const { createdBy } = req.query;
 
-    const completed = await Intervention.find(query).sort({ resolvedAt: -1 });
-    res.json(completed);
+    // Validate createdBy
+    if (!createdBy) {
+      return res.status(400).json({
+        success: false,
+        message: 'createdBy parameter is required',
+      });
+    }
+
+    // Validate ObjectId format
+    if (!mongoose.isValidObjectId(createdBy)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid createdBy ID format',
+      });
+    }
+
+    // Find completed interventions
+    const interventions = await Intervention.find({ 
+      createdBy, 
+      status: 'completed' 
+    })
+      .populate('technician', 'name email')
+      .populate('createdBy', 'name email')
+      .sort({ resolvedAt: -1 }); // Sort by resolved date, newest first
+
+    res.status(200).json({
+      success: true,
+      message: interventions.length 
+        ? 'Completed interventions retrieved successfully'
+        : 'No completed interventions found for this creator',
+      data: interventions,
+    });
   } catch (error) {
-    console.error('Error fetching completed interventions:', error);
-    res.status(500).json({ message: 'Error fetching history', error: error.message });
+    console.error('Error retrieving completed interventions:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error retrieving completed interventions',
+      error: error.message,
+    });
   }
 };
+
+
+
+
+
+
 
 // Schedule intervention
 exports.scheduleIntervention = async (req, res) => {
@@ -475,8 +538,6 @@ exports.scheduleIntervention = async (req, res) => {
     res.status(500).json({ message: 'Error scheduling intervention', error: error.message });
   }
 };
-
-
 
 // Upload intervention images
 exports.uploadImages = async (req, res) => {
