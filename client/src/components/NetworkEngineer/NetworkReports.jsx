@@ -40,18 +40,14 @@ const NetworkReports = () => {
   const [loading, setLoading] = useState(false);
 
   // Get current user from Redux
-  const { currentUser } = useSelector((state) => state.user || {});
+  const currentUser = useSelector((state) => state.user?.currentUser);
   const isEngineerOrAdmin = currentUser?.role === 'engineer' || currentUser?.role === 'admin';
-
-  // Get token from localStorage
-  const token = localStorage.getItem('token');
 
   const API_URL = 'http://localhost:3000/api';
 
   // Debugging logs
   useEffect(() => {
     console.log('Current User:', currentUser);
-    console.log('Token:', token ? 'Present' : 'Missing');
     console.log('Is Engineer or Admin:', isEngineerOrAdmin);
     if (!currentUser) {
       showToast('Please log in to access this page', 'error');
@@ -79,9 +75,7 @@ const NetworkReports = () => {
     setLoading(true);
     try {
       const endpoint = selectedRole === 'all' ? `${API_URL}/users` : `${API_URL}/technicians`;
-      const res = await axios.get(endpoint, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await axios.get(endpoint);
       const usersData = res.data.data || res.data;
       setUsers(usersData);
       console.log('Fetched Users:', usersData);
@@ -94,13 +88,13 @@ const NetworkReports = () => {
   };
 
   const activateTechnician = async (id) => {
+    if (!isEngineerOrAdmin) {
+      showToast('Unauthorized: Only engineers or admins can perform this action', 'error');
+      return;
+    }
     setLoading(true);
     try {
-      const res = await axios.put(
-        `${API_URL}/technicians/${id}/activate`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const res = await axios.put(`${API_URL}/technicians/${id}/activate`, {});
       showToast(res.data.message || 'Technician activated successfully', 'success');
       fetchUsers();
     } catch (err) {
@@ -112,14 +106,14 @@ const NetworkReports = () => {
   };
 
   const deactivateTechnician = async (id) => {
+    if (!isEngineerOrAdmin) {
+      showToast('Unauthorized: Only engineers or admins can perform this action', 'error');
+      return;
+    }
     if (!window.confirm('Are you sure you want to deactivate this technician? This will remove all site assignments.')) return;
     setLoading(true);
     try {
-      const res = await axios.put(
-        `${API_URL}/technicians/${id}/deactivate`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const res = await axios.put(`${API_URL}/technicians/${id}/deactivate`, {});
       showToast(res.data.message || 'Technician deactivated successfully', 'success');
       fetchUsers();
     } catch (err) {

@@ -14,7 +14,8 @@ import {
   FiHardDrive,
   FiChevronRight,
   FiAlertTriangle,
-  FiX
+  FiX,
+  FiCheck
 } from 'react-icons/fi';
 
 const LiveTopologyViewer = () => {
@@ -24,6 +25,8 @@ const LiveTopologyViewer = () => {
   const [selectedTask, setSelectedTask] = useState(null);
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState(null);
+  const [resolveModal, setResolveModal] = useState(null);
+  const [resolutionNotes, setResolutionNotes] = useState('');
   const currentUser = useSelector((state) => state.user?.currentUser);
 
   useEffect(() => {
@@ -35,7 +38,9 @@ const LiveTopologyViewer = () => {
       }
       
       try {
-        const response = await axios.get(`/api/maintenance/technician/${currentUser._id}`);
+        const response = await axios.get(`/api/maintenance/technician/${currentUser._id}`, {
+          headers: { Authorization: `Bearer ${currentUser.token}` }
+        });
         
         if (response.data?.success) {
           setTasks(response.data.data || []);
@@ -56,7 +61,9 @@ const LiveTopologyViewer = () => {
     setModalLoading(true);
     setModalError(null);
     try {
-      const response = await axios.get(`/api/maintenance/${taskId}`);
+      const response = await axios.get(`/api/maintenance/${taskId}`, {
+        headers: { Authorization: `Bearer ${currentUser.token}` }
+      });
       if (response.data?.success) {
         setSelectedTask(response.data.data);
       } else {
@@ -66,6 +73,37 @@ const LiveTopologyViewer = () => {
       setModalError(err.response?.data?.message || 'Failed to load task details');
     } finally {
       setModalLoading(false);
+    }
+  };
+
+  const openResolveModal = (task) => {
+    setResolveModal(task);
+    setResolutionNotes('');
+  };
+
+  const closeResolveModal = () => {
+    setResolveModal(null);
+    setResolutionNotes('');
+  };
+
+  const resolveTask = async (taskId) => {
+    try {
+      const response = await axios.put(`/api/maintenance/resolve/${taskId}`, 
+        { resolutionNotes }, 
+        { headers: { Authorization: `Bearer ${currentUser.token}` } }
+      );
+      if (response.data?.success) {
+        setTasks(tasks.map(task => 
+          task._id === taskId 
+            ? { ...task, status: 'completed', performedAt: new Date(), resolutionNotes } 
+            : task
+        ));
+        closeResolveModal();
+      } else {
+        setError(response.data?.message || 'Failed to resolve task');
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to resolve task');
     }
   };
 
@@ -108,12 +146,16 @@ const LiveTopologyViewer = () => {
     return scheduledDate < today;
   };
 
+  const canResolveTask = (task) => {
+    return ['pending', 'in progress'].includes(task.status.toLowerCase()) && !isTaskOverdue(task);
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="flex flex-col items-center gap-4">
           <span className="loading loading-spinner loading-lg text-primary"></span>
-          <p className="text-white animate-pulse">Loading your tasks...</p>
+          <p className="text-gray-600 animate-pulse">Loading your tasks...</p>
         </div>
       </div>
     );
@@ -139,9 +181,9 @@ const LiveTopologyViewer = () => {
             <div className="p-3 rounded-full bg-primary/10 text-primary">
               <FiTool size={28} />
             </div>
-            <span className="text-black">My Maintenance Tasks</span>
+            <span className="text-gray-800">My Maintenance Tasks</span>
           </h2>
-          <p className="text-white mt-1">Overview of your assigned maintenance activities</p>
+          <p className="text-gray-600 mt-1">Overview of your assigned maintenance activities</p>
         </div>
         <div className="badge badge-primary badge-lg px-4 py-3 text-lg">
           {tasks.length} {tasks.length === 1 ? 'Task' : 'Tasks'} Assigned
@@ -160,20 +202,20 @@ const LiveTopologyViewer = () => {
         <>
           <div className="overflow-x-auto bg-white rounded-lg shadow border border-gray-200">
             <table className="table">
-              <thead className="bg-white">
+              <thead className="bg-gray-50">
                 <tr>
-                  <th className="text-base font-semibold text-black pl-6">Equipment</th>
-                  <th className="text-base font-semibold text-black">Description</th>
-                  <th className="text-base font-semibold text-black">Status</th>
-                  <th className="text-base font-semibold text-black">Scheduled</th>
-                  <th className="text-base font-semibold text-black pr-6">Actions</th>
+                  <th className="text-base font-semibold text-gray-800 pl-6">Equipment</th>
+                  <th className="text-base font-semibold text-gray-800">Description</th>
+                  <th className="text-base font-semibold text-gray-800">Status</th>
+                  <th className="text-base font-semibold text-gray-800">Scheduled</th>
+                  <th className="text-base font-semibold text-gray-800 pr-6">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {tasks.map((task) => (
                   <tr 
                     key={task._id} 
-                    className={`hover:bg-gray-50 transition-colors ${isTaskOverdue(task) ? 'bg-error/5' : ''}`}
+                    className={`hover:bg-gray-50 transition-colors ${isTaskOverdue(task) ? 'bg-red-50' : ''}`}
                   >
                     <td className="pl-6 py-4">
                       <div className="flex items-center">
@@ -181,22 +223,22 @@ const LiveTopologyViewer = () => {
                           {getDeviceIcon(task.equipmentId?.type)}
                         </div>
                         <div>
-                          <div className="font-medium flex items-center gap-2 text-black">
+                          <div className="font-medium flex items-center gap-2 text-gray-800">
                             {task.equipmentId?.name || 'Unspecified'}
                             {isTaskOverdue(task) && (
                               <span className="tooltip" data-tip="Overdue">
-                                <FiAlertTriangle className="text-error" size={16} />
+                                <FiAlertTriangle className="text-red-500" size={16} />
                               </span>
                             )}
                           </div>
                           {task.equipmentId?.serialNumber && (
-                            <div className="text-xs text-white mt-1">{task.equipmentId.serialNumber}</div>
+                            <div className="text-xs text-gray-600 mt-1">{task.equipmentId.serialNumber}</div>
                           )}
                         </div>
                       </div>
                     </td>
                     <td className="max-w-xs py-4">
-                      <div className="line-clamp-2 text-black">{task.description}</div>
+                      <div className="line-clamp-2 text-gray-800">{task.description}</div>
                     </td>
                     <td className="py-4">
                       <div className={getStatusBadge(isTaskOverdue(task) ? 'overdue' : task.status)}>
@@ -205,26 +247,37 @@ const LiveTopologyViewer = () => {
                     </td>
                     <td className="py-4">
                       <div className="flex items-center gap-2">
-                        <FiCalendar size={16} className="text-white" />
-                        <span className="font-medium text-black">
+                        <FiCalendar size={16} className="text-gray-600" />
+                        <span className="font-medium text-gray-800">
                           {new Date(task.scheduledDate).toLocaleDateString()}
                         </span>
                         {isTaskOverdue(task) && (
-                          <span className="text-error text-xs ml-2">(Overdue)</span>
+                          <span className="text-red-500 text-xs ml-2">(Overdue)</span>
                         )}
                       </div>
                     </td>
                     <td className="pr-6 py-4">
-                      <button 
-                        className="btn btn-sm btn-ghost text-primary hover:text-primary/80 transition-all group"
-                        onClick={() => fetchTaskDetails(task._id)}
-                      >
-                        Details
-                        <FiChevronRight 
-                          size={18} 
-                          className="ml-1 group-hover:translate-x-1 transition-transform" 
-                        />
-                      </button>
+                      <div className="flex gap-2">
+                        <button 
+                          className="btn btn-sm btn-ghost text-primary hover:text-primary/80 transition-all group"
+                          onClick={() => fetchTaskDetails(task._id)}
+                        >
+                          Details
+                          <FiChevronRight 
+                            size={18} 
+                            className="ml-1 group-hover:translate-x-1 transition-transform" 
+                          />
+                        </button>
+                        {canResolveTask(task) && (
+                          <button 
+                            className="btn btn-sm btn-success text-white hover:bg-success/80 transition-all"
+                            onClick={() => openResolveModal(task)}
+                          >
+                            <FiCheck size={18} className="mr-1" />
+                            Resolve
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -248,57 +301,63 @@ const LiveTopologyViewer = () => {
                 ) : (
                   <>
                     <div className="flex justify-between items-center mb-4">
-                      <h3 className="text-2xl font-bold text-black">Maintenance Task Details</h3>
+                      <h3 className="text-2xl font-bold text-gray-800">Maintenance Task Details</h3>
                       <button className="btn btn-sm btn-circle btn-ghost" onClick={closeModal}>
                         <FiX size={20} />
                       </button>
                     </div>
                     <div className="space-y-4">
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold text-black">Equipment:</span>
+                        <span className="font-semibold text-gray-800">Equipment:</span>
                         <div className="text-primary">{getDeviceIcon(selectedTask.equipmentId?.type)}</div>
-                        <span className="text-black">{selectedTask.equipmentId?.name || 'Unspecified'}</span>
+                        <span className="text-gray-800">{selectedTask.equipmentId?.name || 'Unspecified'}</span>
                       </div>
                       {selectedTask.equipmentId?.serialNumber && (
                         <div>
-                          <span className="font-semibold text-black">Serial Number:</span>
-                          <span className="text-white ml-2">{selectedTask.equipmentId.serialNumber}</span>
+                          <span className="font-semibold text-gray-800">Serial Number:</span>
+                          <span className="text-gray-600 ml-2">{selectedTask.equipmentId.serialNumber}</span>
                         </div>
                       )}
                       <div>
-                        <span className="font-semibold text-black">Description:</span>
-                        <p className="text-black mt-1">{selectedTask.description}</p>
+                        <span className="font-semibold text-gray-800">Description:</span>
+                        <p className="text-gray-800 mt-1">{selectedTask.description}</p>
                       </div>
                       <div>
-                        <span className="font-semibold text-black">Status:</span>
+                        <span className="font-semibold text-gray-800">Status:</span>
                         <span className={getStatusBadge(isTaskOverdue(selectedTask) ? 'overdue' : selectedTask.status)}>
                           {isTaskOverdue(selectedTask) ? 'Overdue' : selectedTask.status}
                         </span>
                       </div>
                       <div>
-                        <span className="font-semibold text-black">Scheduled Date:</span>
-                        <span className="text-black ml-2">{new Date(selectedTask.scheduledDate).toLocaleDateString()}</span>
+                        <span className="font-semibold text-gray-800">Scheduled Date:</span>
+                        <span className="text-gray-800 ml-2">{new Date(selectedTask.scheduledDate).toLocaleDateString()}</span>
                       </div>
                       {selectedTask.scheduledTime && (
                         <div>
-                          <span className="font-semibold text-black">Scheduled Time:</span>
-                          <span className="text-black ml-2">{selectedTask.scheduledTime}</span>
+                          <span className="font-semibold text-gray-800">Scheduled Time:</span>
+                          <span className="text-gray-800 ml-2">{selectedTask.scheduledTime}</span>
                         </div>
                       )}
                       {selectedTask.performedAt && (
                         <div>
-                          <span className="font-semibold text-black">Performed At:</span>
-                          <span className="text-black ml-2">{new Date(selectedTask.performedAt).toLocaleString()}</span>
+                          <span className="font-semibold text-gray-800">Performed At:</span>
+                          <span className="text-gray-800 ml-2">{new Date(selectedTask.performedAt).toLocaleString()}</span>
+                        </div>
+                      )}
+                      {selectedTask.resolutionNotes && (
+                        <div>
+                          <span className="font-semibold text-gray-800">Resolution Notes:</span>
+                          <span className="text-gray-800 ml-2">{selectedTask.resolutionNotes}</span>
                         </div>
                       )}
                       <div>
-                        <span className="font-semibold text-black">Technician:</span>
-                        <span className="text-black ml-2">{selectedTask.performedBy?.name || 'Unknown'}</span>
+                        <span className="font-semibold text-gray-800">Technician:</span>
+                        <span className="text-gray-800 ml-2">{selectedTask.performedBy?.name || 'Unknown'}</span>
                       </div>
                       {selectedTask.performedBy?.email && (
                         <div>
-                          <span className="font-semibold text-black">Technician Email:</span>
-                          <span className="text-black ml-2">{selectedTask.performedBy.email}</span>
+                          <span className="font-semibold text-gray-800">Technician Email:</span>
+                          <span className="text-gray-800 ml-2">{selectedTask.performedBy.email}</span>
                         </div>
                       )}
                     </div>
@@ -312,6 +371,52 @@ const LiveTopologyViewer = () => {
               </div>
             </div>
           )}
+
+          {/* Modal for resolving task */}
+          {resolveModal && (
+            <div className="modal modal-open">
+              <div className="modal-box bg-white max-w-lg">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-2xl font-bold text-gray-800">Resolve Maintenance Task</h3>
+                  <button className="btn btn-sm btn-circle btn-ghost" onClick={closeResolveModal}>
+                    <FiX size={20} />
+                  </button>
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <label className="font-semibold text-gray-800">Technician:</label>
+                    <input 
+                      type="text" 
+                      value={currentUser?.name || 'Unknown'} 
+                      className="input input-bordered w-full mt-1 bg-gray-100" 
+                      readOnly 
+                    />
+                  </div>
+                  <div>
+                    <label className="font-semibold text-gray-800">Resolution Notes:</label>
+                    <textarea
+                      className="textarea textarea-bordered w-full mt-1"
+                      value={resolutionNotes}
+                      onChange={(e) => setResolutionNotes(e.target.value)}
+                      placeholder="Enter resolution details (optional)"
+                    ></textarea>
+                  </div>
+                </div>
+                <div className="modal-action mt-6">
+                  <button className="btn btn-ghost" onClick={closeResolveModal}>
+                    Cancel
+                  </button>
+                  <button 
+                    className="btn btn-success text-white" 
+                    onClick={() => resolveTask(resolveModal._id)}
+                  >
+                    <FiCheck size={18} className="mr-1" />
+                    Resolve Task
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           
           {/* Summary footer */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
@@ -319,11 +424,11 @@ const LiveTopologyViewer = () => {
               <div className="stat-figure text-success">
                 <FiCheckCircle size={28} />
               </div>
-              <div className="stat-title text-white">Completed</div>
+              <div className="stat-title text-gray-600">Completed</div>
               <div className="stat-value text-success">
                 {tasks.filter(t => t.status === 'completed').length}
               </div>
-              <div className="stat-desc text-white">
+              <div className="stat-desc text-gray-600">
                 {Math.round((tasks.filter(t => t.status === 'completed').length / tasks.length) * 100)}% of total
               </div>
             </div>
@@ -332,11 +437,11 @@ const LiveTopologyViewer = () => {
               <div className="stat-figure text-warning">
                 <FiClock size={28} />
               </div>
-              <div className="stat-title text-white">In Progress</div>
+              <div className="stat-title text-gray-600">In Progress</div>
               <div className="stat-value text-warning">
                 {tasks.filter(t => t.status === 'in progress').length}
               </div>
-              <div className="stat-desc text-white">
+              <div className="stat-desc text-gray-600">
                 {tasks.filter(t => t.status === 'in progress' && isTaskOverdue(t)).length} overdue
               </div>
             </div>
@@ -345,11 +450,11 @@ const LiveTopologyViewer = () => {
               <div className="stat-figure text-error">
                 <FiAlertCircle size={28} />
               </div>
-              <div className="stat-title text-white">Pending</div>
+              <div className="stat-title text-gray-600">Pending</div>
               <div className="stat-value text-error">
                 {tasks.filter(t => t.status === 'pending').length}
               </div>
-              <div className="stat-desc text-white">
+              <div className="stat-desc text-gray-600">
                 {tasks.filter(t => t.status === 'pending' && isTaskOverdue(t)).length} overdue
               </div>
             </div>

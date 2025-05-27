@@ -12,6 +12,7 @@ router.get('/equipment/:equipmentId', maintenanceController.getMaintenanceByEqui
 router.put('/:id', maintenanceController.updateMaintenance);
 // Delete a maintenance record by ID
 router.delete('/:id', maintenanceController.deleteMaintenance);
+router.put('/resolve/:id', maintenanceController.resolveMaintenance);
 
 
 router.get('/:id', maintenanceController.getMaintenanceById);

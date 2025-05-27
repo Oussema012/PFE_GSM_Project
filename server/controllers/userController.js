@@ -94,36 +94,23 @@ exports.activateTechnician = async (req, res) => {
 // Deactivate a technician
 exports.deactivateTechnician = async (req, res) => {
   try {
-    // Check if the requesting user is an engineer or admin
-    if (!['engineer', 'admin'].includes(req.user.role)) {
-      return res.status(403).json({ message: "Only engineers or admins can deactivate technicians" });
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: 'Invalid technician ID' });
     }
-
-    const technician = await User.findOne({ _id: req.params.id, role: 'technician' });
+    const technician = await User.findOne({ _id: id, role: 'technician' });
     if (!technician) {
-      return res.status(404).json({ message: "Technician not found" });
+      return res.status(404).json({ message: 'Technician not found' });
     }
-
-    if (!technician.isActive) {
-      return res.status(400).json({ message: "Technician is already deactivated" });
+    if (!req.user || !['admin', 'engineer'].includes(req.user.role)) {
+      return res.status(403).json({ message: 'Unauthorized' });
     }
-
-    // Save current assignedSites to previousAssignedSites
-    technician.previousAssignedSites = [...technician.assignedSites];
     technician.isActive = false;
-    // Remove all privileges by clearing assignedSites
     technician.assignedSites = [];
     await technician.save();
-
-    res.status(200).json({
-      message: "Technician deactivated successfully",
-      data: technician,
-    });
+    res.json({ message: 'Technician deactivated successfully' });
   } catch (error) {
-    res.status(500).json({
-      message: "Server error while deactivating technician",
-      error,
-    });
+    console.error('Deactivation error:', error.stack);
+    res.status(500).json({ message: `Server error: ${error.message}` });
   }
 };
-

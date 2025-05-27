@@ -32,6 +32,11 @@ const MaintenanceSchema = new mongoose.Schema({
   performedAt: {
     type: Date,
   },
+  resolutionNotes: {
+    type: String,
+    trim: true,
+    default: '',
+  },
 });
 
 module.exports = mongoose.model('Maintenance', MaintenanceSchema);

@@ -2,7 +2,6 @@ const mongoose = require('mongoose');
 const Maintenance = require('../models/Maintenance');
 const User = require('../models/User');
 
-// @desc    Create a new maintenance record
 // @route   POST /api/maintenance
 // @access  Private
 const addMaintenance = async (req, res) => {
@@ -98,7 +97,6 @@ const addMaintenance = async (req, res) => {
   }
 };
 
-// @desc    Get all maintenance records
 // @route   GET /api/maintenance
 // @access  Private
 const getAllMaintenances = async (req, res) => {
@@ -411,6 +409,62 @@ const getMaintenanceByTechnicianById = async (req, res) => {
   }
 };
 
+const resolveMaintenance = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { resolutionNotes } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid maintenance ID format',
+      });
+    }
+
+    const maintenance = await Maintenance.findById(id);
+    
+    if (!maintenance) {
+      return res.status(404).json({
+        success: false,
+        message: 'Maintenance task not found',
+      });
+    }
+
+    if (maintenance.status === 'completed') {
+      return res.status(400).json({
+        success: false,
+        message: 'Maintenance task is already completed',
+      });
+    }
+
+    maintenance.status = 'completed';
+    maintenance.performedAt = new Date();
+    if (resolutionNotes) {
+      maintenance.resolutionNotes = resolutionNotes;
+    }
+    
+    await maintenance.save();
+
+    const populatedMaintenance = await Maintenance.findById(id)
+      .populate('equipmentId', 'name type serialNumber')
+      .populate('performedBy', 'name email')
+      .lean();
+
+    res.status(200).json({
+      success: true,
+      message: 'Maintenance task resolved successfully',
+      data: populatedMaintenance,
+    });
+  } catch (error) {
+    console.error('Resolve maintenance error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error resolving maintenance task',
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   addMaintenance,
   getAllMaintenances,
@@ -419,4 +473,5 @@ module.exports = {
   deleteMaintenance,
   getMaintenanceById,
   getMaintenanceByTechnicianById,
+  resolveMaintenance,
 };
