@@ -39,22 +39,15 @@ const NetworkReports = () => {
   const [selectedRole, setSelectedRole] = useState('all');
   const [loading, setLoading] = useState(false);
 
-  // Get current user from Redux
   const currentUser = useSelector((state) => state.user?.currentUser);
-  const isEngineerOrAdmin = currentUser?.role === 'engineer' || currentUser?.role === 'admin';
-
   const API_URL = 'http://localhost:3000/api';
 
-  // Debugging logs
   useEffect(() => {
     console.log('Current User:', currentUser);
-    console.log('Is Engineer or Admin:', isEngineerOrAdmin);
     if (!currentUser) {
       showToast('Please log in to access this page', 'error');
-    } else if (!isEngineerOrAdmin) {
-      showToast(`Only engineers or admins can manage technicians (your role: ${currentUser.role})`, 'error');
     }
-  }, [currentUser, isEngineerOrAdmin]);
+  }, [currentUser]);
 
   useEffect(() => {
     fetchUsers();
@@ -88,10 +81,6 @@ const NetworkReports = () => {
   };
 
   const activateTechnician = async (id) => {
-    if (!isEngineerOrAdmin) {
-      showToast('Unauthorized: Only engineers or admins can perform this action', 'error');
-      return;
-    }
     setLoading(true);
     try {
       const res = await axios.put(`${API_URL}/technicians/${id}/activate`, {});
@@ -99,17 +88,15 @@ const NetworkReports = () => {
       fetchUsers();
     } catch (err) {
       console.error('Error activating technician:', err);
-      showToast(err.response?.data?.message || 'Failed to activate technician', 'error');
+      const errorMessage = err.response?.data?.message || 'Failed to activate technician';
+      const errorDetails = err.response?.data?.error ? `: ${err.response.data.error}` : '';
+      showToast(`${errorMessage}${errorDetails}`, 'error');
     } finally {
       setLoading(false);
     }
   };
 
   const deactivateTechnician = async (id) => {
-    if (!isEngineerOrAdmin) {
-      showToast('Unauthorized: Only engineers or admins can perform this action', 'error');
-      return;
-    }
     if (!window.confirm('Are you sure you want to deactivate this technician? This will remove all site assignments.')) return;
     setLoading(true);
     try {
@@ -118,7 +105,9 @@ const NetworkReports = () => {
       fetchUsers();
     } catch (err) {
       console.error('Error deactivating technician:', err);
-      showToast(err.response?.data?.message || 'Failed to deactivate technician', 'error');
+      const errorMessage = err.response?.data?.message || 'Failed to deactivate technician';
+      const errorDetails = err.response?.data?.error ? `: ${err.response.data.error}` : '';
+      showToast(`${errorMessage}${errorDetails}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -146,7 +135,6 @@ const NetworkReports = () => {
 
   return (
     <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: '1400px', mx: 'auto' }}>
-      {/* Page Header */}
       <Box
         sx={{
           display: 'flex',
@@ -177,7 +165,6 @@ const NetworkReports = () => {
             </Typography>
           </Box>
         </Box>
-
         <Box
           sx={{
             display: 'flex',
@@ -199,7 +186,6 @@ const NetworkReports = () => {
               <MenuItem value="engineer">Engineer</MenuItem>
             </Select>
           </FormControl>
-
           <TextField
             size="small"
             placeholder="Search users..."
@@ -212,8 +198,6 @@ const NetworkReports = () => {
           />
         </Box>
       </Box>
-
-      {/* Users Table */}
       <TableContainer component={Paper} sx={{ boxShadow: 3 }}>
         {loading ? (
           <Box sx={{ p: 4, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
@@ -277,7 +261,7 @@ const NetworkReports = () => {
                     <TableCell>{user.loginCount || 0}</TableCell>
                     <TableCell>{formatDate(user.lastActive)}</TableCell>
                     <TableCell align="right">
-                      {user.role === 'technician' && isEngineerOrAdmin && (
+                      {user.role === 'technician' && (
                         <>
                           <IconButton
                             color="success"
@@ -311,8 +295,6 @@ const NetworkReports = () => {
           </Table>
         )}
       </TableContainer>
-
-      {/* Toast Notification */}
       <Snackbar
         open={toast.open}
         autoHideDuration={4000}

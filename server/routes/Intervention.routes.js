@@ -7,6 +7,7 @@ router.post('/', InterventionController.createIntervention);
 router.get('/', InterventionController.getInterventionsByCreator);
 router.get('/tech', InterventionController.getInterventionsByTechnician);
 router.put('/:id', InterventionController.updateInterventionStatus);
+router.post('/:id/resolve', InterventionController.resolveIntervention);
 router.put('/:id/resolve', InterventionController.resolveIntervention);
 router.delete('/:id', InterventionController.deleteIntervention);
 router.get('/:id', InterventionController.getInterventionById);

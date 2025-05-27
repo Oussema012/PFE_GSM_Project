@@ -7,10 +7,20 @@ const InterventionsTech = () => {
   const [interventions, setInterventions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showResolveModal, setShowResolveModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [selectedIntervention, setSelectedIntervention] = useState(null);
+  const [resolutionNotes, setResolutionNotes] = useState('');
+  const [validatedBy, setValidatedBy] = useState('');
+  const [interventionDetails, setInterventionDetails] = useState(null);
 
   useEffect(() => {
     const fetchInterventions = async () => {
-      if (!currentUser?._id) return;
+      if (!currentUser?._id) {
+        setError('User not logged in');
+        setLoading(false);
+        return;
+      }
       
       try {
         setLoading(true);
@@ -26,7 +36,12 @@ const InterventionsTech = () => {
     };
 
     fetchInterventions();
-  }, [currentUser]);
+
+    // Cleanup to prevent state updates on unmounted component
+    return () => {
+      // Cancel any ongoing requests or timers if needed
+    };
+  }, [currentUser?._id, currentUser?.isActive]); // Added currentUser.isActive to dependencies
 
   const formatDate = (dateString) => {
     const options = { year: 'numeric', month: 'short', day: 'numeric' };
@@ -65,6 +80,72 @@ const InterventionsTech = () => {
     }
   };
 
+  const handleResolveClick = (intervention) => {
+    if (!currentUser?.isActive) return;
+    setSelectedIntervention(intervention);
+    setResolutionNotes('');
+    setValidatedBy(currentUser?.name || '');
+    setShowResolveModal(true);
+  };
+
+  const handleViewDetailsClick = async (intervention) => {
+    if (!currentUser?.isActive) return;
+    try {
+      setLoading(true);
+      const response = await axios.get(`/api/interventions/${intervention._id}`);
+      setInterventionDetails(response.data.data);
+      setShowDetailsModal(true);
+      setError(null);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to fetch intervention details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResolveSubmit = async (e) => {
+    e.preventDefault();
+    if (!currentUser?.isActive) {
+      setError('You are not authorized to perform this action.');
+      return;
+    }
+    if (!resolutionNotes.trim() || !validatedBy.trim()) {
+      setError('Resolution notes and validated by fields are required');
+      return;
+    }
+
+    try {
+      const response = await axios.post(`/api/interventions/${selectedIntervention._id}/resolve`, {
+        resolutionNotes,
+        validatedBy,
+      });
+
+      setInterventions((prev) =>
+        prev.map((int) =>
+          int._id === selectedIntervention._id ? response.data.data : int
+        )
+      );
+      setShowResolveModal(false);
+      setError(null);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to resolve intervention');
+    }
+  };
+
+  const closeResolveModal = () => {
+    setShowResolveModal(false);
+    setSelectedIntervention(null);
+    setResolutionNotes('');
+    setValidatedBy('');
+    setError(null);
+  };
+
+  const closeDetailsModal = () => {
+    setShowDetailsModal(false);
+    setInterventionDetails(null);
+    setError(null);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -73,7 +154,7 @@ const InterventionsTech = () => {
     );
   }
 
-  if (error) {
+  if (error && !showResolveModal && !showDetailsModal) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
@@ -87,6 +168,12 @@ const InterventionsTech = () => {
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold text-gray-800 mb-6">My Interventions</h1>
       
+      {!currentUser?.isActive && (
+        <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-6">
+          <p>Your account is inactive. You can view interventions but cannot perform actions.</p>
+        </div>
+      )}
+
       {interventions.length === 0 ? (
         <div className="bg-white rounded-lg shadow p-6 text-center">
           <p className="text-gray-600">No interventions assigned to you yet.</p>
@@ -105,6 +192,7 @@ const InterventionsTech = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created By</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created At</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -138,10 +226,184 @@ const InterventionsTech = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {formatDate(intervention.createdAt)}
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap flex space-x-2">
+                      <button
+                        onClick={() => handleViewDetailsClick(intervention)}
+                        className={`px-3 py-1 rounded text-sm ${
+                          currentUser?.isActive
+                            ? 'bg-blue-500 text-white hover:bg-blue-600'
+                            : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        }`}
+                        disabled={!currentUser?.isActive}
+                        aria-label={`View details for intervention ${intervention._id}`}
+                      >
+                        View Details
+                      </button>
+                      {intervention.status.toLowerCase() !== 'completed' && (
+                        <button
+                          onClick={() => handleResolveClick(intervention)}
+                          className={`px-3 py-1 rounded text-sm ${
+                            currentUser?.isActive
+                              ? 'bg-green-500 text-white hover:bg-green-600'
+                              : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                          }`}
+                          disabled={!currentUser?.isActive}
+                          aria-label={`Resolve intervention ${intervention._id}`}
+                        >
+                          Resolve
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {showResolveModal && currentUser?.isActive && (
+        <div
+          className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50"
+          aria-modal="true"
+          role="dialog"
+        >
+          <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4">Resolve Intervention</h2>
+            {error && (
+              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded mb-4">
+                {error}
+              </div>
+            )}
+            <form onSubmit={handleResolveSubmit}>
+              <div className="mb-4">
+                <label htmlFor="resolutionNotes" className="block text-sm font-medium text-gray-700">
+                  Resolution Notes
+                </label>
+                <textarea
+                  id="resolutionNotes"
+                  value={resolutionNotes}
+                  onChange={(e) => setResolutionNotes(e.target.value)}
+                  className="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  rows="4"
+                  required
+                  aria-required="true"
+                />
+              </div>
+              <div className="mb-4">
+                <label htmlFor="validatedBy" className="block text-sm font-medium text-gray-700">
+                  Validated By
+                </label>
+                <input
+                  id="validatedBy"
+                  type="text"
+                  value={validatedBy}
+                  onChange={(e) => setValidatedBy(e.target.value)}
+                  className="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                  aria-required="true"
+                  readOnly
+                />
+              </div>
+              <div className="flex justify-end space-x-2">
+                <button
+                  type="button"
+                  onClick={closeResolveModal}
+                  className="bg-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-400"
+                  aria-label="Cancel resolution"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
+                  aria-label="Submit resolution"
+                >
+                  Submit
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showDetailsModal && currentUser?.isActive && interventionDetails && (
+        <div
+          className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50"
+          aria-modal="true"
+          role="dialog"
+        >
+          <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-lg">
+            <h2 className="text-xl font-bold mb-4">Intervention Details</h2>
+            {error && (
+              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded mb-4">
+                {error}
+              </div>
+            )}
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Site ID</label>
+                <p className="text-sm text-gray-500">{interventionDetails.siteId}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Description</label>
+                <p className="text-sm text-gray-500">{interventionDetails.description}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Planned Date</label>
+                <p className="text-sm text-gray-500">{formatDate(interventionDetails.plannedDate)}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Time Slot</label>
+                <p className="text-sm text-gray-500">{formatTimeSlot(interventionDetails.timeSlot)}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Priority</label>
+                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getPriorityColor(interventionDetails.priority)}`}>
+                  {interventionDetails.priority}
+                </span>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Status</label>
+                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(interventionDetails.status)}`}>
+                  {interventionDetails.status}
+                </span>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Created By</label>
+                <p className="text-sm text-gray-500">{interventionDetails.createdBy?.name || 'N/A'}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Created At</label>
+                <p className="text-sm text-gray-500">{formatDate(interventionDetails.createdAt)}</p>
+              </div>
+              {interventionDetails.status.toLowerCase() === 'completed' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Resolution Notes</label>
+                    <p className="text-sm text-gray-500">{interventionDetails.resolutionNotes || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Validated By</label>
+                    <p className="text-sm text-gray-500">{interventionDetails.validatedBy || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Resolved At</label>
+                    <p className="text-sm text-gray-500">{formatDate(interventionDetails.resolvedAt) || 'N/A'}</p>
+                  </div>
+                </>
+              )}
+            </div>
+            <div className="flex justify-end mt-6">
+              <button
+                type="button"
+                onClick={closeDetailsModal}
+                className="bg-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-400"
+                aria-label="Close details modal"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

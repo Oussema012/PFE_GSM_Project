@@ -505,7 +505,6 @@ exports.getCompletedInterventions = async (req, res) => {
 
 
 
-
 // Schedule intervention
 exports.scheduleIntervention = async (req, res) => {
   try {

@@ -38,7 +38,7 @@ const LiveTopologyViewer = () => {
         setLoading(false);
         return;
       }
-      
+
       try {
         const response = await axios.get(`/api/maintenance/technician/${currentUser._id}`, {
           headers: { Authorization: `Bearer ${currentUser.token}` }
@@ -61,6 +61,11 @@ const LiveTopologyViewer = () => {
   }, [currentUser]);
 
   const fetchTaskDetails = async (taskId) => {
+    if (!currentUser.isActive) {
+      setModalError('Cannot view task details in observation mode');
+      return;
+    }
+
     setModalLoading(true);
     setModalError(null);
     try {
@@ -81,6 +86,10 @@ const LiveTopologyViewer = () => {
   };
 
   const openResolveModal = (task) => {
+    if (!currentUser.isActive) {
+      setError('Cannot resolve tasks in observation mode');
+      return;
+    }
     setResolveModal(task);
     setResolutionNotes('');
   };
@@ -91,6 +100,11 @@ const LiveTopologyViewer = () => {
   };
 
   const resolveTask = async (taskId) => {
+    if (!currentUser.isActive) {
+      setError('Cannot resolve tasks in observation mode');
+      return;
+    }
+
     try {
       const response = await axios.put(
         `/api/maintenance/resolve/${taskId}`, 
@@ -153,7 +167,7 @@ const LiveTopologyViewer = () => {
   };
 
   const canResolveTask = (task) => {
-    return ['pending', 'in progress'].includes(task.status.toLowerCase()) && !isTaskOverdue(task);
+    return currentUser.isActive && ['pending', 'in progress'].includes(task.status.toLowerCase()) && !isTaskOverdue(task);
   };
 
   if (loading) {
@@ -189,7 +203,11 @@ const LiveTopologyViewer = () => {
             </div>
             <span className="text-gray-800">My Maintenance Tasks</span>
           </h2>
-          <p className="text-gray-600 mt-1">Overview of your assigned maintenance activities</p>
+          <p className="text-gray-600 mt-1">
+            {currentUser.isActive 
+              ? 'Overview of your assigned maintenance activities'
+              : 'You are in observation mode (deactivated). You can view tasks but cannot perform actions. Contact an admin to reactivate your account.'}
+          </p>
         </div>
         <div className="badge badge-primary badge-lg px-4 py-3 text-lg">
           {tasks.length} {tasks.length === 1 ? 'Task' : 'Tasks'} Assigned
@@ -265,19 +283,27 @@ const LiveTopologyViewer = () => {
                     <td className="pr-6 py-4">
                       <div className="flex gap-2">
                         <button 
-                          className="btn btn-sm btn-ghost text-primary hover:text-primary/80 transition-all group"
+                          className={`btn btn-sm btn-ghost text-primary transition-all group ${
+                            !currentUser.isActive ? 'btn-disabled opacity-50 cursor-not-allowed' : 'hover:text-primary/80'
+                          }`}
                           onClick={() => fetchTaskDetails(task._id)}
+                          disabled={!currentUser.isActive}
+                          title={!currentUser.isActive ? 'Actions disabled in observation mode' : ''}
                         >
                           Details
                           <FiChevronRight 
                             size={18} 
-                            className="ml-1 group-hover:translate-x-1 transition-transform" 
+                            className={`ml-1 ${currentUser.isActive ? 'group-hover:translate-x-1 transition-transform' : ''}`} 
                           />
                         </button>
                         {canResolveTask(task) && (
                           <button 
-                            className="btn btn-sm btn-success text-white hover:bg-success/80 transition-all"
+                            className={`btn btn-sm btn-success text-white transition-all ${
+                              !currentUser.isActive ? 'btn-disabled opacity-50 cursor-not-allowed' : 'hover:bg-success/80'
+                            }`}
                             onClick={() => openResolveModal(task)}
+                            disabled={!currentUser.isActive}
+                            title={!currentUser.isActive ? 'Actions disabled in observation mode' : ''}
                           >
                             <FiCheck size={18} className="mr-1" />
                             Resolve
@@ -292,7 +318,7 @@ const LiveTopologyViewer = () => {
           </div>
 
           {/* Modal for task details */}
-          {selectedTask && (
+          {selectedTask && currentUser.isActive && (
             <div className="modal modal-open">
               <div className="modal-box bg-white max-w-lg">
                 {modalLoading ? (
@@ -385,7 +411,7 @@ const LiveTopologyViewer = () => {
           )}
 
           {/* Modal for resolving task */}
-          {resolveModal && (
+          {resolveModal && currentUser.isActive && (
             <div className="modal modal-open">
               <div className="modal-box bg-white max-w-lg">
                 <div className="flex justify-between items-center mb-4">

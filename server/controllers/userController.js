@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const bcrypt = require('bcryptjs');
+const mongoose = require('mongoose');
 
 // Get all users
 exports.getAllUsers = async (req, res) => {
@@ -10,7 +11,6 @@ exports.getAllUsers = async (req, res) => {
     res.status(500).json({ message: "Server error", error });
   }
 };
-
 // Get all technicians only
 exports.getAllTechnicians = async (req, res) => {
   try {
@@ -20,8 +20,6 @@ exports.getAllTechnicians = async (req, res) => {
     res.status(500).json({ success: false, message: "Server error", error });
   }
 };
-
-
 // Get one technician by ID
 exports.getTechnicianById = async (req, res) => {
   try {
@@ -57,60 +55,110 @@ exports.signout = (req, res) => {
 // Activate a technician
 exports.activateTechnician = async (req, res) => {
   try {
-    // Check if the requesting user is an engineer or admin
-    if (!['engineer', 'admin'].includes(req.user.role)) {
-      return res.status(403).json({ message: "Only engineers or admins can activate technicians" });
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid technician ID" });
     }
-
-    const technician = await User.findOne({ _id: req.params.id, role: 'technician' });
+    const technician = await User.findOne({ _id: id, role: "technician" });
     if (!technician) {
       return res.status(404).json({ message: "Technician not found" });
     }
-
     if (technician.isActive) {
       return res.status(400).json({ message: "Technician is already active" });
     }
 
     technician.isActive = true;
-    // Restore previous assignedSites if they exist
-    if (technician.previousAssignedSites && technician.previousAssignedSites.length > 0) {
-      technician.assignedSites = [...technician.previousAssignedSites];
-      // Optionally clear previousAssignedSites after restoration
+    // Restore previousAssignedSites if they exist and are valid
+    if (
+      Array.isArray(technician.previousAssignedSites) &&
+      technician.previousAssignedSites.length > 0
+    ) {
+      // Validate that previousAssignedSites contains valid ObjectIds
+      const validSites = technician.previousAssignedSites.filter((siteId) =>
+        mongoose.Types.ObjectId.isValid(siteId)
+      );
+      technician.assignedSites = validSites.map((siteId) =>
+        mongoose.Types.ObjectId(siteId)
+      );
       technician.previousAssignedSites = [];
     }
+    console.log("Technician before save (activate):", {
+      _id: technician._id,
+      isActive: technician.isActive,
+      assignedSites: technician.assignedSites,
+      previousAssignedSites: technician.previousAssignedSites,
+    });
     await technician.save();
 
     res.status(200).json({
       message: "Technician activated successfully",
-      data: technician,
+      data: {
+        _id: technician._id,
+        name: technician.name,
+        email: technician.email,
+        role: technician.role,
+        isActive: technician.isActive,
+        assignedSites: technician.assignedSites,
+        previousAssignedSites: technician.previousAssignedSites,
+      },
     });
   } catch (error) {
+    console.error("Activation error:", {
+      message: error.message,
+      stack: error.stack,
+      technicianId: req.params.id,
+    });
     res.status(500).json({
-      message: "Server error while activating technician",
-      error,
+      message: "Server error during activation",
+      error: error.message,
+      details: error.name === "ValidationError" ? error.errors : error.stack,
     });
   }
 };
+
 // Deactivate a technician
 exports.deactivateTechnician = async (req, res) => {
+  const { id } = req.params; // ✅ Move this here
   try {
-    const { id } = req.params;
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ message: 'Invalid technician ID' });
+      return res.status(400).json({ message: "Invalid technician ID" });
     }
-    const technician = await User.findOne({ _id: id, role: 'technician' });
+    const technician = await User.findOne({ _id: id, role: "technician" });
     if (!technician) {
-      return res.status(404).json({ message: 'Technician not found' });
+      return res.status(404).json({ message: "Technician not found" });
     }
-    if (!req.user || !['admin', 'engineer'].includes(req.user.role)) {
-      return res.status(403).json({ message: 'Unauthorized' });
+    if (!technician.isActive) {
+      return res.status(400).json({ message: "Technician is already inactive" });
     }
+
     technician.isActive = false;
+    technician.previousAssignedSites = Array.isArray(technician.assignedSites)
+      ? technician.assignedSites
+          .filter((siteId) => mongoose.Types.ObjectId.isValid(siteId))
+          .map((siteId) => siteId.toString())
+      : [];
     technician.assignedSites = [];
+
+    console.log("Technician before save (deactivate):", {
+      _id: technician._id,
+      isActive: technician.isActive,
+      assignedSites: technician.assignedSites,
+      previousAssignedSites: technician.previousAssignedSites,
+    });
+
     await technician.save();
-    res.json({ message: 'Technician deactivated successfully' });
+
+    res.status(200).json({ message: "Technician deactivated successfully" });
   } catch (error) {
-    console.error('Deactivation error:', error.stack);
-    res.status(500).json({ message: `Server error: ${error.message}` });
+    console.error("Deactivation error:", {
+      message: error.message,
+      stack: error.stack,
+      technicianId: id, // ✅ Now it’s defined
+    });
+    res.status(500).json({
+      message: "Server error during deactivation",
+      error: error.message,
+      details: error.name === "ValidationError" ? error.errors : error.stack,
+    });
   }
 };
