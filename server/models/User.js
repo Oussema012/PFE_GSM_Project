@@ -28,6 +28,9 @@ const userSchema = new mongoose.Schema(
       enum: ["admin", "engineer", "technician"],
       required: [true, "Role is required"],
     },
+    //hethi zeda jdida zedtha teb3a active/desactive
+    previousAssignedSites: [{ type: String }],
+    //njm nfase5 li fou9i
     isActive: {
       type: Boolean,
       default: true,

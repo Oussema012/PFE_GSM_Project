@@ -87,7 +87,6 @@ const addMaintenance = async (req, res) => {
     });
   }
 };
-
 // Get maintenance records by equipment ID
 const getMaintenanceByEquipment = async (req, res) => {
   try {
@@ -111,7 +110,6 @@ const getMaintenanceByEquipment = async (req, res) => {
     });
   }
 };
-
 // Get all maintenance records
 const getAllMaintenances = async (req, res) => {
   try {
@@ -129,7 +127,6 @@ const getAllMaintenances = async (req, res) => {
     });
   }
 };
-
 // Update maintenance record
 const updateMaintenance = async (req, res) => {
   try {
@@ -245,7 +242,6 @@ const updateMaintenance = async (req, res) => {
     });
   }
 };
-
 // Delete maintenance record
 const deleteMaintenance = async (req, res) => {
   try {
@@ -271,10 +267,67 @@ const deleteMaintenance = async (req, res) => {
   }
 };
 
+
+
+
+// In your controller file
+const getMaintenanceByTechnicianById = async (req, res) => {
+  try {
+    const technicianId = req.params.technicianId;
+
+    if (!mongoose.Types.ObjectId.isValid(technicianId)) {
+      return res.status(400).json({ message: 'Invalid technician ID format' });
+    }
+
+    const technician = await User.findOne({ _id: technicianId, role: 'technician' });
+    if (!technician) {
+      return res.status(404).json({ message: 'Technician not found or not a technician' });
+    }
+
+    const maintenanceRecords = await Maintenance.find({ performedBy: technicianId })
+      .populate('equipmentId', 'name serialNumber')
+      .populate('performedBy', 'name email')
+      .sort({ scheduledDate: -1 });
+
+    if (!maintenanceRecords.length) {
+      return res.status(404).json({ message: 'No maintenance records found for this technician' });
+    }
+
+    return res.status(200).json({
+      success: true,
+      count: maintenanceRecords.length,
+      data: maintenanceRecords,
+    });
+  } catch (error) {
+    console.error('Error fetching maintenance records:', error);
+    return res.status(500).json({
+      message: 'Server error while fetching maintenance records',
+      error: error.message,
+    });
+  }
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 module.exports = {
   addMaintenance,
   getMaintenanceByEquipment,
   getAllMaintenances,
   updateMaintenance,
   deleteMaintenance,
+  getMaintenanceByTechnicianById,
 };
