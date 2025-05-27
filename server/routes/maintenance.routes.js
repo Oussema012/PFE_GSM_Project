@@ -14,6 +14,7 @@ router.put('/:id', maintenanceController.updateMaintenance);
 router.delete('/:id', maintenanceController.deleteMaintenance);
 
 
+router.get('/:id', maintenanceController.getMaintenanceById);
 
 // In your routes file
 router.get('/technician/:technicianId', maintenanceController.getMaintenanceByTechnicianById);

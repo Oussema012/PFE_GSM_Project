@@ -2,7 +2,9 @@ const mongoose = require('mongoose');
 const Maintenance = require('../models/Maintenance');
 const User = require('../models/User');
 
-// Add a maintenance record
+// @desc    Create a new maintenance record
+// @route   POST /api/maintenance
+// @access  Private
 const addMaintenance = async (req, res) => {
   try {
     const { equipmentId, description, performedBy, status, scheduledDate, scheduledTime } = req.body;
@@ -10,26 +12,30 @@ const addMaintenance = async (req, res) => {
     // Validate required fields
     if (!equipmentId || !description || !performedBy || !scheduledDate) {
       return res.status(400).json({
+        success: false,
         message: 'equipmentId, description, performedBy, and scheduledDate are required',
       });
     }
 
-    // Validate equipmentId
+    // Validate ObjectIds
     if (!mongoose.Types.ObjectId.isValid(equipmentId)) {
       return res.status(400).json({
+        success: false,
         message: 'Invalid equipmentId format',
       });
     }
-
-    // Validate performedBy as ObjectId and technician
     if (!mongoose.Types.ObjectId.isValid(performedBy)) {
       return res.status(400).json({
+        success: false,
         message: 'Invalid technician ID format',
       });
     }
+
+    // Validate technician
     const technician = await User.findOne({ _id: performedBy, role: 'technician' });
     if (!technician) {
       return res.status(400).json({
+        success: false,
         message: 'Technician not found or not a technician',
       });
     }
@@ -40,77 +46,61 @@ const addMaintenance = async (req, res) => {
 
     if (!isValidDateFormat(scheduledDate)) {
       return res.status(400).json({
+        success: false,
         message: 'scheduledDate must be in YYYY-MM-DD format',
       });
     }
     if (scheduledTime && !isValidTimeFormat(scheduledTime)) {
       return res.status(400).json({
+        success: false,
         message: 'scheduledTime must be in HH:mm:ss format',
       });
     }
 
     // Combine date and time in CET
-    let performedAt;
-    try {
-      performedAt = scheduledTime
-        ? new Date(`${scheduledDate}T${scheduledTime}+02:00`) // Explicitly CET
-        : new Date(`${scheduledDate}T00:00:00+02:00`);
+    let performedAt = null;
+    if (scheduledTime) {
+      performedAt = new Date(`${scheduledDate}T${scheduledTime}+02:00`);
       if (isNaN(performedAt.getTime())) {
-        return res.status(400).json({ message: 'Invalid date or time format' });
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid date or time format',
+        });
       }
-    } catch (error) {
-      return res.status(400).json({
-        message: 'Error parsing date or time',
-        error: error.message,
-      });
     }
 
-    const newMaintenance = new Maintenance({
+    const newMaintenance = await Maintenance.create({
       equipmentId,
       description,
       performedBy,
-      scheduledDate: new Date(`${scheduledDate}T00:00:00+02:00`), // Store date in CET
-      performedAt: performedAt || null,
       status: status && ['pending', 'in progress', 'completed'].includes(status) ? status : 'pending',
+      scheduledDate: new Date(`${scheduledDate}T00:00:00+02:00`),
+      scheduledTime: scheduledTime || '',
+      performedAt: status === 'completed' ? performedAt || new Date() : null,
     });
 
-    await newMaintenance.save();
     const populatedMaintenance = await Maintenance.findById(newMaintenance._id)
-      .populate('equipmentId', 'name')
-      .populate('performedBy', 'name');
-    res.status(201).json(populatedMaintenance);
-  } catch (err) {
-    console.error('Add maintenance error:', err);
-    res.status(500).json({
-      message: 'Error creating maintenance',
-      error: err.message,
-    });
-  }
-};
-// Get maintenance records by equipment ID
-const getMaintenanceByEquipment = async (req, res) => {
-  try {
-    const { equipmentId } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(equipmentId)) {
-      return res.status(400).json({
-        message: 'Invalid equipmentId format',
-      });
-    }
-    const maintenance = await Maintenance.find({ equipmentId })
-      .populate('equipmentId', 'name')
-      .populate('performedBy', 'name')
-      .sort({ performedAt: -1 });
+      .populate('equipmentId', 'name type serialNumber')
+      .populate('performedBy', 'name email')
+      .lean();
 
-    res.status(200).json(maintenance);
-  } catch (err) {
-    console.error('Get maintenance by equipment error:', err);
+    res.status(201).json({
+      success: true,
+      data: populatedMaintenance,
+    });
+  } catch (error) {
+    console.error('Add maintenance error:', error);
     res.status(500).json({
-      message: 'Error retrieving maintenance records',
-      error: err.message,
+      success: false,
+      message: 'Error creating maintenance',
+      error: error.message,
     });
   }
 };
-// Get all maintenance records
+
+// @desc    Get all maintenance records
+// @route   GET /api/maintenance
+// @access  Private
 const getAllMaintenances = async (req, res) => {
   try {
     const allMaintenances = await Maintenance.find()
@@ -127,15 +117,60 @@ const getAllMaintenances = async (req, res) => {
     });
   }
 };
-// Update maintenance record
+// @desc    Get maintenance records by equipment ID
+// @route   GET /api/maintenance/equipment/:equipmentId
+// @access  Private
+const getMaintenanceByEquipment = async (req, res) => {
+  try {
+    const { equipmentId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(equipmentId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid equipmentId format',
+      });
+    }
+
+    const maintenances = await Maintenance.find({ equipmentId })
+      .populate('equipmentId', 'name type serialNumber')
+      .populate('performedBy', 'name email')
+      .sort({ scheduledDate: -1 })
+      .lean();
+
+    res.status(200).json({
+      success: true,
+      count: maintenances.length,
+      data: maintenances,
+    });
+  } catch (error) {
+    console.error('Get maintenance by equipment error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error retrieving maintenance records',
+      error: error.message,
+    });
+  }
+};
+
+// @desc    Update a maintenance record by ID
+// @route   PUT /api/maintenance/:id
+// @access  Private
 const updateMaintenance = async (req, res) => {
   try {
     const { id } = req.params;
     const { equipmentId, description, performedBy, status, scheduledDate, scheduledTime } = req.body;
 
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid maintenance ID format',
+      });
+    }
+
     // Validate at least one field is provided
     if (!equipmentId && !description && !performedBy && !status && !scheduledDate && !scheduledTime) {
       return res.status(400).json({
+        success: false,
         message: 'At least one field must be provided for update',
       });
     }
@@ -146,6 +181,7 @@ const updateMaintenance = async (req, res) => {
     if (equipmentId) {
       if (!mongoose.Types.ObjectId.isValid(equipmentId)) {
         return res.status(400).json({
+          success: false,
           message: 'Invalid equipmentId format',
         });
       }
@@ -156,6 +192,7 @@ const updateMaintenance = async (req, res) => {
     if (description) {
       if (description.length < 5) {
         return res.status(400).json({
+          success: false,
           message: 'Description must be at least 5 characters',
         });
       }
@@ -166,12 +203,14 @@ const updateMaintenance = async (req, res) => {
     if (performedBy) {
       if (!mongoose.Types.ObjectId.isValid(performedBy)) {
         return res.status(400).json({
+          success: false,
           message: 'Invalid technician ID format',
         });
       }
       const technician = await User.findOne({ _id: performedBy, role: 'technician' });
       if (!technician) {
         return res.status(400).json({
+          success: false,
           message: 'Technician not found or not a technician',
         });
       }
@@ -182,6 +221,7 @@ const updateMaintenance = async (req, res) => {
     if (status) {
       if (!['pending', 'in progress', 'completed'].includes(status)) {
         return res.status(400).json({
+          success: false,
           message: 'Status must be pending, in progress, or completed',
         });
       }
@@ -195,139 +235,188 @@ const updateMaintenance = async (req, res) => {
 
       if (!isValidDateFormat(scheduledDate)) {
         return res.status(400).json({
+          success: false,
           message: 'scheduledDate must be in YYYY-MM-DD format',
         });
       }
       if (scheduledTime && !isValidTimeFormat(scheduledTime)) {
         return res.status(400).json({
+          success: false,
           message: 'scheduledTime must be in HH:mm:ss format',
         });
       }
 
-      try {
-        const performedAt = scheduledTime
-          ? new Date(`${scheduledDate}T${scheduledTime}+02:00`) // Explicitly CET
-          : new Date(`${scheduledDate}T00:00:00+02:00`);
+      updatedFields.scheduledDate = new Date(`${scheduledDate}T00:00:00+02:00`);
+      if (scheduledTime) {
+        const performedAt = new Date(`${scheduledDate}T${scheduledTime}+02:00`);
         if (isNaN(performedAt.getTime())) {
-          return res.status(400).json({ message: 'Invalid date or time format' });
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid date or time format',
+          });
         }
-        updatedFields.scheduledDate = new Date(`${scheduledDate}T00:00:00+02:00`);
         updatedFields.performedAt = performedAt;
-      } catch (error) {
-        return res.status(400).json({
-          message: 'Error parsing date or time',
-          error: error.message,
-        });
+        updatedFields.scheduledTime = scheduledTime;
+      } else {
+        updatedFields.scheduledTime = '';
       }
     }
 
     const updated = await Maintenance.findByIdAndUpdate(id, updatedFields, {
       new: true,
       runValidators: true,
-    });
+    })
+      .populate('equipmentId', 'name type serialNumber')
+      .populate('performedBy', 'name email')
+      .lean();
 
     if (!updated) {
-      return res.status(404).json({ message: 'Maintenance record not found' });
-    }
-
-    const populatedUpdated = await Maintenance.findById(id)
-      .populate('equipmentId', 'name')
-      .populate('performedBy', 'name');
-    res.status(200).json(populatedUpdated);
-  } catch (err) {
-    console.error('Update maintenance error:', err);
-    res.status(500).json({
-      message: 'Error updating maintenance',
-      error: err.message,
-    });
-  }
-};
-// Delete maintenance record
-const deleteMaintenance = async (req, res) => {
-  try {
-    const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        message: 'Invalid maintenance ID format',
+      return res.status(404).json({
+        success: false,
+        message: 'Maintenance record not found',
       });
     }
-    const deleted = await Maintenance.findByIdAndDelete(id);
 
-    if (!deleted) {
-      return res.status(404).json({ message: 'Maintenance record not found' });
-    }
-
-    res.status(200).json({ message: 'Maintenance record deleted successfully' });
-  } catch (err) {
-    console.error('Delete maintenance error:', err);
-    res.status(500).json({
-      message: 'Error deleting maintenance',
-      error: err.message,
-    });
-  }
-};
-
-
-
-
-// In your controller file
-const getMaintenanceByTechnicianById = async (req, res) => {
-  try {
-    const technicianId = req.params.technicianId;
-
-    if (!mongoose.Types.ObjectId.isValid(technicianId)) {
-      return res.status(400).json({ message: 'Invalid technician ID format' });
-    }
-
-    const technician = await User.findOne({ _id: technicianId, role: 'technician' });
-    if (!technician) {
-      return res.status(404).json({ message: 'Technician not found or not a technician' });
-    }
-
-    const maintenanceRecords = await Maintenance.find({ performedBy: technicianId })
-      .populate('equipmentId', 'name serialNumber')
-      .populate('performedBy', 'name email')
-      .sort({ scheduledDate: -1 });
-
-    if (!maintenanceRecords.length) {
-      return res.status(404).json({ message: 'No maintenance records found for this technician' });
-    }
-
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
-      count: maintenanceRecords.length,
-      data: maintenanceRecords,
+      data: updated,
     });
   } catch (error) {
-    console.error('Error fetching maintenance records:', error);
-    return res.status(500).json({
-      message: 'Server error while fetching maintenance records',
+    console.error('Update maintenance error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error updating maintenance',
       error: error.message,
     });
   }
 };
 
+// @desc    Delete a maintenance record by ID
+// @route   DELETE /api/maintenance/:id
+// @access  Private
+const deleteMaintenance = async (req, res) => {
+  try {
+    const { id } = req.params;
 
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid maintenance ID format',
+      });
+    }
 
+    const deleted = await Maintenance.findByIdAndDelete(id);
 
+    if (!deleted) {
+      return res.status(404).json({
+        success: false,
+        message: 'Maintenance record not found',
+      });
+    }
 
+    res.status(200).json({
+      success: true,
+      message: 'Maintenance record deleted successfully',
+    });
+  } catch (error) {
+    console.error('Delete maintenance error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting maintenance',
+      error: error.message,
+    });
+  }
+};
 
+// @desc    Get maintenance task by ID
+// @route   GET /api/maintenance/:id
+// @access  Private
+const getMaintenanceById = async (req, res) => {
+  try {
+    const { id } = req.params;
 
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid maintenance ID format',
+      });
+    }
 
+    const maintenance = await Maintenance.findById(id)
+      .populate('equipmentId', 'name type serialNumber')
+      .populate('performedBy', 'name email')
+      .lean();
 
+    if (!maintenance) {
+      return res.status(404).json({
+        success: false,
+        message: 'Maintenance task not found',
+      });
+    }
 
+    res.status(200).json({
+      success: true,
+      data: maintenance,
+    });
+  } catch (error) {
+    console.error('Get maintenance by ID error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error retrieving maintenance task',
+      error: error.message,
+    });
+  }
+};
 
+// @desc    Get maintenance tasks by technician ID
+// @route   GET /api/maintenance/technician/:technicianId
+// @access  Private
+const getMaintenanceByTechnicianById = async (req, res) => {
+  try {
+    const { technicianId } = req.params;
 
+    if (!mongoose.Types.ObjectId.isValid(technicianId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid technician ID format',
+      });
+    }
 
+    const technician = await User.findOne({ _id: technicianId, role: 'technician' });
+    if (!technician) {
+      return res.status(404).json({
+        success: false,
+        message: 'Technician not found or not a technician',
+      });
+    }
 
+    const maintenanceRecords = await Maintenance.find({ performedBy: technicianId })
+      .populate('equipmentId', 'name type serialNumber')
+      .populate('performedBy', 'name email')
+      .sort({ scheduledDate: -1 })
+      .lean();
 
-
+    res.status(200).json({
+      success: true,
+      count: maintenanceRecords.length,
+      data: maintenanceRecords,
+    });
+  } catch (error) {
+    console.error('Get maintenance by technician error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error retrieving maintenance records',
+      error: error.message,
+    });
+  }
+};
 
 module.exports = {
   addMaintenance,
-  getMaintenanceByEquipment,
   getAllMaintenances,
+  getMaintenanceByEquipment,
   updateMaintenance,
   deleteMaintenance,
+  getMaintenanceById,
   getMaintenanceByTechnicianById,
 };

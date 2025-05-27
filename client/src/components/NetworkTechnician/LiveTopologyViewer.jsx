@@ -10,17 +10,20 @@ import {
   FiCheckCircle,
   FiClock,
   FiCalendar,
-  FiUser,
   FiTool,
   FiHardDrive,
   FiChevronRight,
-  FiAlertTriangle
+  FiAlertTriangle,
+  FiX
 } from 'react-icons/fi';
 
 const LiveTopologyViewer = () => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedTask, setSelectedTask] = useState(null);
+  const [modalLoading, setModalLoading] = useState(false);
+  const [modalError, setModalError] = useState(null);
   const currentUser = useSelector((state) => state.user?.currentUser);
 
   useEffect(() => {
@@ -48,6 +51,28 @@ const LiveTopologyViewer = () => {
 
     fetchTasks();
   }, [currentUser]);
+
+  const fetchTaskDetails = async (taskId) => {
+    setModalLoading(true);
+    setModalError(null);
+    try {
+      const response = await axios.get(`/api/maintenance/${taskId}`);
+      if (response.data?.success) {
+        setSelectedTask(response.data.data);
+      } else {
+        setModalError(response.data?.message || 'Failed to load task details');
+      }
+    } catch (err) {
+      setModalError(err.response?.data?.message || 'Failed to load task details');
+    } finally {
+      setModalLoading(false);
+    }
+  };
+
+  const closeModal = () => {
+    setSelectedTask(null);
+    setModalError(null);
+  };
 
   const getDeviceIcon = (type) => {
     const iconProps = { size: 20, className: 'mr-3' };
@@ -135,7 +160,6 @@ const LiveTopologyViewer = () => {
         <>
           <div className="overflow-x-auto bg-white rounded-lg shadow border border-gray-200">
             <table className="table">
-              {/* Table header */}
               <thead className="bg-white">
                 <tr>
                   <th className="text-base font-semibold text-black pl-6">Equipment</th>
@@ -145,8 +169,6 @@ const LiveTopologyViewer = () => {
                   <th className="text-base font-semibold text-black pr-6">Actions</th>
                 </tr>
               </thead>
-              
-              {/* Table body */}
               <tbody>
                 {tasks.map((task) => (
                   <tr 
@@ -193,7 +215,10 @@ const LiveTopologyViewer = () => {
                       </div>
                     </td>
                     <td className="pr-6 py-4">
-                      <button className="btn btn-sm btn-ghost text-primary hover:text-primary/80 transition-all group">
+                      <button 
+                        className="btn btn-sm btn-ghost text-primary hover:text-primary/80 transition-all group"
+                        onClick={() => fetchTaskDetails(task._id)}
+                      >
                         Details
                         <FiChevronRight 
                           size={18} 
@@ -206,6 +231,87 @@ const LiveTopologyViewer = () => {
               </tbody>
             </table>
           </div>
+
+          {/* Modal for task details */}
+          {selectedTask && (
+            <div className="modal modal-open">
+              <div className="modal-box bg-white max-w-lg">
+                {modalLoading ? (
+                  <div className="flex justify-center items-center h-32">
+                    <span className="loading loading-spinner loading-lg text-primary"></span>
+                  </div>
+                ) : modalError ? (
+                  <div className="alert alert-error shadow-lg">
+                    <FiAlertCircle size={24} />
+                    <span className="text-white">{modalError}</span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-2xl font-bold text-black">Maintenance Task Details</h3>
+                      <button className="btn btn-sm btn-circle btn-ghost" onClick={closeModal}>
+                        <FiX size={20} />
+                      </button>
+                    </div>
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-black">Equipment:</span>
+                        <div className="text-primary">{getDeviceIcon(selectedTask.equipmentId?.type)}</div>
+                        <span className="text-black">{selectedTask.equipmentId?.name || 'Unspecified'}</span>
+                      </div>
+                      {selectedTask.equipmentId?.serialNumber && (
+                        <div>
+                          <span className="font-semibold text-black">Serial Number:</span>
+                          <span className="text-white ml-2">{selectedTask.equipmentId.serialNumber}</span>
+                        </div>
+                      )}
+                      <div>
+                        <span className="font-semibold text-black">Description:</span>
+                        <p className="text-black mt-1">{selectedTask.description}</p>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-black">Status:</span>
+                        <span className={getStatusBadge(isTaskOverdue(selectedTask) ? 'overdue' : selectedTask.status)}>
+                          {isTaskOverdue(selectedTask) ? 'Overdue' : selectedTask.status}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-black">Scheduled Date:</span>
+                        <span className="text-black ml-2">{new Date(selectedTask.scheduledDate).toLocaleDateString()}</span>
+                      </div>
+                      {selectedTask.scheduledTime && (
+                        <div>
+                          <span className="font-semibold text-black">Scheduled Time:</span>
+                          <span className="text-black ml-2">{selectedTask.scheduledTime}</span>
+                        </div>
+                      )}
+                      {selectedTask.performedAt && (
+                        <div>
+                          <span className="font-semibold text-black">Performed At:</span>
+                          <span className="text-black ml-2">{new Date(selectedTask.performedAt).toLocaleString()}</span>
+                        </div>
+                      )}
+                      <div>
+                        <span className="font-semibold text-black">Technician:</span>
+                        <span className="text-black ml-2">{selectedTask.performedBy?.name || 'Unknown'}</span>
+                      </div>
+                      {selectedTask.performedBy?.email && (
+                        <div>
+                          <span className="font-semibold text-black">Technician Email:</span>
+                          <span className="text-black ml-2">{selectedTask.performedBy.email}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="modal-action mt-6">
+                      <button className="btn btn-primary" onClick={closeModal}>
+                        Close
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
           
           {/* Summary footer */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
