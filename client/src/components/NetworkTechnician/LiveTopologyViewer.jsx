@@ -17,12 +17,14 @@ import {
   FiX,
   FiCheck
 } from 'react-icons/fi';
+import moment from 'moment';
+import 'moment-timezone';
 
 const LiveTopologyViewer = () => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [selectedTask, setSelectedTask] = useState(null);
+  const [selectedTask, setModalTask] = useState(null);
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState(null);
   const [resolveModal, setResolveModal] = useState(null);
@@ -49,6 +51,7 @@ const LiveTopologyViewer = () => {
         }
       } catch (err) {
         setError(err.response?.data?.message || 'Failed to fetch tasks');
+        console.error('Fetch tasks error:', err);
       } finally {
         setLoading(false);
       }
@@ -65,12 +68,13 @@ const LiveTopologyViewer = () => {
         headers: { Authorization: `Bearer ${currentUser.token}` }
       });
       if (response.data?.success) {
-        setSelectedTask(response.data.data);
+        setModalTask(response.data.data);
       } else {
         setModalError(response.data?.message || 'Failed to load task details');
       }
     } catch (err) {
       setModalError(err.response?.data?.message || 'Failed to load task details');
+      console.error('Fetch task details error:', err);
     } finally {
       setModalLoading(false);
     }
@@ -88,7 +92,8 @@ const LiveTopologyViewer = () => {
 
   const resolveTask = async (taskId) => {
     try {
-      const response = await axios.put(`/api/maintenance/resolve/${taskId}`, 
+      const response = await axios.put(
+        `/api/maintenance/resolve/${taskId}`, 
         { resolutionNotes }, 
         { headers: { Authorization: `Bearer ${currentUser.token}` } }
       );
@@ -104,11 +109,12 @@ const LiveTopologyViewer = () => {
       }
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to resolve task');
+      console.error('Resolve task error:', err);
     }
   };
 
   const closeModal = () => {
-    setSelectedTask(null);
+    setModalTask(null);
     setModalError(null);
   };
 
@@ -141,9 +147,9 @@ const LiveTopologyViewer = () => {
 
   const isTaskOverdue = (task) => {
     if (task.status.toLowerCase() === 'completed') return false;
-    const scheduledDate = new Date(task.scheduledDate);
-    const today = new Date();
-    return scheduledDate < today;
+    const scheduledDate = moment(task.scheduledDate).tz('Europe/Paris');
+    const today = moment().tz('Europe/Paris');
+    return scheduledDate.isBefore(today, 'day');
   };
 
   const canResolveTask = (task) => {
@@ -249,7 +255,7 @@ const LiveTopologyViewer = () => {
                       <div className="flex items-center gap-2">
                         <FiCalendar size={16} className="text-gray-600" />
                         <span className="font-medium text-gray-800">
-                          {new Date(task.scheduledDate).toLocaleDateString()}
+                          {moment(task.scheduledDate).tz('Europe/Paris').format('MMM D, YYYY')}
                         </span>
                         {isTaskOverdue(task) && (
                           <span className="text-red-500 text-xs ml-2">(Overdue)</span>
@@ -330,18 +336,24 @@ const LiveTopologyViewer = () => {
                       </div>
                       <div>
                         <span className="font-semibold text-gray-800">Scheduled Date:</span>
-                        <span className="text-gray-800 ml-2">{new Date(selectedTask.scheduledDate).toLocaleDateString()}</span>
+                        <span className="text-gray-800 ml-2">
+                          {moment(selectedTask.scheduledDate).tz('Europe/Paris').format('MMM D, YYYY')}
+                        </span>
                       </div>
                       {selectedTask.scheduledTime && (
                         <div>
                           <span className="font-semibold text-gray-800">Scheduled Time:</span>
-                          <span className="text-gray-800 ml-2">{selectedTask.scheduledTime}</span>
+                          <span className="text-gray-800 ml-2">
+                            {moment(selectedTask.scheduledTime, 'HH:mm:ss').format('h:mm A')}
+                          </span>
                         </div>
                       )}
                       {selectedTask.performedAt && (
                         <div>
                           <span className="font-semibold text-gray-800">Performed At:</span>
-                          <span className="text-gray-800 ml-2">{new Date(selectedTask.performedAt).toLocaleString()}</span>
+                          <span className="text-gray-800 ml-2">
+                            {moment(selectedTask.performedAt).tz('Europe/Paris').format('MMM D, YYYY h:mm A')}
+                          </span>
                         </div>
                       )}
                       {selectedTask.resolutionNotes && (

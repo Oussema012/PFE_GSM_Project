@@ -7,6 +7,7 @@ import {
   FiCheckCircle,
   FiAlertCircle,
   FiClock,
+  FiEye // Added for See Details
 } from 'react-icons/fi';
 import { FaWrench } from 'react-icons/fa';
 import moment from 'moment';
@@ -24,13 +25,14 @@ const NetworkSettings = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(null); // New state for details modal
 
   const [formData, setFormData] = useState({
     equipmentId: '',
     description: '',
-    performedBy: '', // Will store technician _id
+    performedBy: '',
     status: 'pending',
-    scheduledDate: moment().format('YYYY-MM-DD'),
+    scheduledDate: moment().tz('Europe/Paris').format('YYYY-MM-DD'),
     scheduledTime: '',
   });
 
@@ -67,6 +69,7 @@ const NetworkSettings = () => {
   };
 
   // Add new maintenance
+ // Add new maintenance
   const addMaintenance = async () => {
     setError('');
     setSuccessMessage('');
@@ -132,13 +135,11 @@ const NetworkSettings = () => {
     setError('');
     setSuccessMessage('');
 
-    // Validate at least one field is provided
     if (!formData.description && !formData.performedBy && !formData.status && !formData.scheduledDate) {
-      setError('At least one field (description, technician, status, or date) is required for update.');
+      setError('At least one field is required for update.');
       return;
     }
 
-    // Validate performedBy if provided
     if (formData.performedBy && !/^[0-9a-fA-F]{24}$/.test(formData.performedBy)) {
       setError('Please select a valid technician');
       return;
@@ -147,14 +148,13 @@ const NetworkSettings = () => {
     try {
       const updatedData = { ...formData };
 
-      // Validate and format scheduledDate and scheduledTime if provided
       if (formData.scheduledDate) {
-        const scheduledDate = moment(formData.scheduledDate, 'YYYY-MM-DD').format('YYYY-MM-DD');
-        if (!moment(scheduledDate, 'YYYY-MM-DD', true).isValid()) {
+        const scheduledDate = moment(formData.scheduledDate, 'YYYY-MM-DD').tz('Europe/Paris', true);
+        if (!scheduledDate.isValid()) {
           setError('Scheduled date must be in YYYY-MM-DD format');
           return;
         }
-        updatedData.scheduledDate = scheduledDate;
+        updatedData.scheduledDate = scheduledDate.toISOString();
 
         if (formData.scheduledTime) {
           const time = moment(formData.scheduledTime, 'HH:mm');
@@ -168,7 +168,6 @@ const NetworkSettings = () => {
         }
       }
 
-      console.log('Updating payload:', updatedData);
       const response = await axios.put(`/api/maintenance/${showEditModal}`, updatedData);
       setMaintenances(maintenances.map(m => (m._id === showEditModal ? response.data : m)));
       setSuccessMessage('Maintenance updated successfully');
@@ -205,7 +204,7 @@ const NetworkSettings = () => {
       description: '',
       performedBy: '',
       status: 'pending',
-      scheduledDate: moment().format('YYYY-MM-DD'),
+      scheduledDate: moment().tz('Europe/Paris').format('YYYY-MM-DD'),
       scheduledTime: '',
     });
   };
@@ -218,16 +217,27 @@ const NetworkSettings = () => {
 
   // Open edit modal with maintenance data
   const openEditModal = (maintenance) => {
-    const performedAt = maintenance.performedAt ? moment(maintenance.performedAt).tz('Europe/Paris') : moment(maintenance.scheduledDate).tz('Europe/Paris');
+    const dateField = maintenance.performedAt || maintenance.scheduledDate;
+    const date = moment(dateField).tz('Europe/Paris');
     setFormData({
       equipmentId: maintenance.equipmentId?._id || maintenance.equipmentId,
       description: maintenance.description,
       performedBy: maintenance.performedBy?._id || maintenance.performedBy || '',
       status: maintenance.status,
-      scheduledDate: performedAt.format('YYYY-MM-DD'),
-      scheduledTime: performedAt.isValid() ? performedAt.format('HH:mm') : '',
+      scheduledDate: date.format('YYYY-MM-DD'),
+      scheduledTime: maintenance.scheduledTime ? moment(maintenance.scheduledTime, 'HH:mm:ss').format('HH:mm') : '',
     });
     setShowEditModal(maintenance._id);
+  };
+
+  // Open details modal
+  const openDetailsModal = (maintenance) => {
+    setShowDetailsModal(maintenance);
+  };
+
+  // Close details modal
+  const closeDetailsModal = () => {
+    setShowDetailsModal(null);
   };
 
   // Fetch maintenances and technicians on component mount
@@ -277,6 +287,13 @@ const NetworkSettings = () => {
                 </p>
               </div>
               <div className="flex space-x-2">
+                <button
+                  onClick={() => openDetailsModal(maintenance)}
+                  className="text-blue-600 hover:text-blue-900"
+                  title="See Details"
+                >
+                  <FiEye className="h-5 w-5" />
+                </button>
                 <button
                   onClick={() => openEditModal(maintenance)}
                   className="text-indigo-600 hover:text-indigo-900"
@@ -573,108 +590,76 @@ const NetworkSettings = () => {
           </div>
         )}
 
-        {/* Delete Confirmation Modal */}
-        {showEditModal && (
+        {/* Details Modal */}
+        {showDetailsModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 animate-fade-in">
             <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full transform transition-all animate-scale-in">
               <div className="flex items-center mb-4">
-                <FiEdit className="h-6 w-6 text-indigo-600 mr-2" />
-                <h3 className="text-lg font-semibold text-gray-900">Edit Maintenance</h3>
+                <FiEye className="h-6 w-6 text-blue-600 mr-2" />
+                <h3 className="text-lg font-semibold text-gray-900">Maintenance Details</h3>
               </div>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Equipment ID</label>
-                  <input
-                    type="text"
-                    name="equipmentId"
-                    value={formData.equipmentId}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                    placeholder="Enter equipment ID"
-                    readOnly
-                  />
+                  <label className="block text-sm font-medium text-gray-700">Equipment</label>
+                  <p className="mt-1 text-sm text-gray-600">
+                    {showDetailsModal.equipmentId?.name || 'Unknown'} ({showDetailsModal.equipmentId?.serialNumber || 'N/A'})
+                  </p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Description</label>
-                  <textarea
-                    name="description"
-                    value={formData.description}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                    placeholder="Enter maintenance description"
-                    rows="3"
-                  />
+                  <p className="mt-1 text-sm text-gray-600">{showDetailsModal.description}</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Technician</label>
-                  <select
-                    name="performedBy"
-                    value={formData.performedBy}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                  >
-                    <option value="">Select a technician</option>
-                    {technicians.map(tech => (
-                      <option key={tech._id} value={tech._id}>
-                        {tech.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Date</label>
-                    <input
-                      type="date"
-                      name="scheduledDate"
-                      value={formData.scheduledDate}
-                      onChange={handleInputChange}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Time</label>
-                    <input
-                      type="time"
-                      name="scheduledTime"
-                      value={formData.scheduledTime}
-                      onChange={handleInputChange}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                      step="60"
-                    />
-                  </div>
+                  <p className="mt-1 text-sm text-gray-600">
+                    {showDetailsModal.performedBy?.name || 'N/A'} ({showDetailsModal.performedBy?.email || 'N/A'})
+                  </p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Status</label>
-                  <select
-                    name="status"
-                    value={formData.status}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                  >
-                    <option value="pending">Pending</option>
-                    <option value="in progress">In Progress</option>
-                    <option value="completed">Completed</option>
-                  </select>
+                  <p className="mt-1 text-sm text-gray-600 capitalize">{showDetailsModal.status}</p>
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Scheduled Date</label>
+                  <p className="mt-1 text-sm text-gray-600">
+                    {moment(showDetailsModal.scheduledDate).tz('Europe/Paris').format('MMM D, YYYY')}
+                  </p>
+                </div>
+                {showDetailsModal.scheduledTime && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Scheduled Time</label>
+                    <p className="mt-1 text-sm text-gray-600">
+                      {moment(showDetailsModal.scheduledTime, 'HH:mm:ss').format('h:mm A')}
+                    </p>
+                  </div>
+                )}
+                {showDetailsModal.performedAt && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Performed At</label>
+                    <p className="mt-1 text-sm text-gray-600">
+                      {moment(showDetailsModal.performedAt).tz('Europe/Paris').format('MMM D, YYYY h:mm A')}
+                    </p>
+                  </div>
+                )}
+                {showDetailsModal.resolutionNotes && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Resolution Notes</label>
+                    <p className="mt-1 text-sm text-gray-600">{showDetailsModal.resolutionNotes}</p>
+                  </div>
+                )}
               </div>
-              <div className="mt-6 flex justify-end space-x-3">
+              <div className="mt-6 flex justify-end">
                 <button
-                  onClick={() => setShowEditModal(null)}
+                  onClick={closeDetailsModal}
                   className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 text-sm"
                 >
-                  Cancel
-                </button>
-                <button
-                  onClick={updateMaintenance}
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
-                >
-                  Update
+                  Close
                 </button>
               </div>
             </div>
           </div>
         )}
+
         {/* Delete Confirmation Modal */}
         {showDeleteModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 animate-fade-in">
