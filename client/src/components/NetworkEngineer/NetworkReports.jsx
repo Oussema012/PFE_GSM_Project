@@ -26,7 +26,6 @@ import {
   Search as SearchIcon,
   People as PeopleIcon,
   AccessTime as AccessTimeIcon,
-  Timeline as TimelineIcon,
   Power as PowerIcon,
   PowerOff as PowerOffIcon,
 } from '@mui/icons-material';
@@ -43,7 +42,6 @@ const NetworkReports = () => {
   const API_URL = 'http://localhost:3000/api';
 
   useEffect(() => {
-    console.log('Current User:', currentUser);
     if (!currentUser) {
       showToast('Please log in to access this page', 'error');
     }
@@ -71,9 +69,7 @@ const NetworkReports = () => {
       const res = await axios.get(endpoint);
       const usersData = res.data.data || res.data;
       setUsers(usersData);
-      console.log('Fetched Users:', usersData);
     } catch (err) {
-      console.error('Error fetching users:', err);
       showToast('Failed to fetch user reports', 'error');
     } finally {
       setLoading(false);
@@ -87,7 +83,6 @@ const NetworkReports = () => {
       showToast(res.data.message || 'Technician activated successfully', 'success');
       fetchUsers();
     } catch (err) {
-      console.error('Error activating technician:', err);
       const errorMessage = err.response?.data?.message || 'Failed to activate technician';
       const errorDetails = err.response?.data?.error ? `: ${err.response.data.error}` : '';
       showToast(`${errorMessage}${errorDetails}`, 'error');
@@ -104,7 +99,6 @@ const NetworkReports = () => {
       showToast(res.data.message || 'Technician deactivated successfully', 'success');
       fetchUsers();
     } catch (err) {
-      console.error('Error deactivating technician:', err);
       const errorMessage = err.response?.data?.message || 'Failed to deactivate technician';
       const errorDetails = err.response?.data?.error ? `: ${err.response.data.error}` : '';
       showToast(`${errorMessage}${errorDetails}`, 'error');
@@ -215,14 +209,8 @@ const NetworkReports = () => {
                 <TableCell>Sites</TableCell>
                 <TableCell>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <TimelineIcon fontSize="small" />
-                    Activity
-                  </Box>
-                </TableCell>
-                <TableCell>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <AccessTimeIcon fontSize="small" />
-                    Last Active
+                    Last Login
                   </Box>
                 </TableCell>
                 <TableCell align="right">Actions</TableCell>
@@ -258,8 +246,7 @@ const NetworkReports = () => {
                     <TableCell>
                       {user.assignedSites?.length || 0} Site(s)
                     </TableCell>
-                    <TableCell>{user.loginCount || 0}</TableCell>
-                    <TableCell>{formatDate(user.lastActive)}</TableCell>
+                    <TableCell>{formatDate(user.lastLogin)}</TableCell>
                     <TableCell align="right">
                       {user.role === 'technician' && (
                         <>
@@ -286,7 +273,7 @@ const NetworkReports = () => {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
+                  <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
                     <Typography color="text.secondary">No users found</Typography>
                   </TableCell>
                 </TableRow>

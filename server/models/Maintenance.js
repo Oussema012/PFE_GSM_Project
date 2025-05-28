@@ -25,10 +25,16 @@ const MaintenanceSchema = new mongoose.Schema({
     type: Date,
     required: [true, 'Scheduled date is required'],
   },
-  scheduledTime: {
-    type: String,
-    default: '',
+ scheduledTime: {
+  type: String,
+  default: '',
+  validate: {
+    validator: function (v) {
+      return v === '' || /^\d{2}:\d{2}:\d{2}$/.test(v);
+    },
+    message: 'scheduledTime must be in HH:mm:ss format or empty',
   },
+},
   performedAt: {
     type: Date,
   },

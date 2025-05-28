@@ -3,8 +3,6 @@ import { useSelector } from 'react-redux';
 import ScheduleIntervention from './ScheduleIntervention';
 import InterventionModal from './InterventionModal';
 import downloadCSV from './exportCSV';
-import ResolveInterventionModal from './ResolveInterventionModal';
-import UpdateStatusModal from './UpdateStatusModal';
 
 // API base URL
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -96,28 +94,6 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-/*
-// TypeScript Interfaces (uncomment if using TypeScript)
-interface Technician {
-  _id?: string;
-  name?: string;
-  email?: string;
-}
-
-interface Intervention {
-  _id: string;
-  siteId?: string;
-  technician?: Technician | null;
-  plannedDate: string;
-  priority?: string;
-  status?: string;
-  description?: string;
-  createdAt?: string;
-  resolvedAt?: string;
-  resolutionNotes?: string;
-}
-*/
-
 const NetworkTopology = () => {
   const [interventions, setInterventions] = useState([]);
   const [filteredInterventions, setFilteredInterventions] = useState([]);
@@ -135,8 +111,6 @@ const NetworkTopology = () => {
   const [selectedIntervention, setSelectedIntervention] = useState(null);
   const [sortConfig, setSortConfig] = useState({ key: 'plannedDate', direction: 'asc' });
   const [showScheduleModal, setShowScheduleModal] = useState(false);
-  const [showResolveModal, setShowResolveModal] = useState(null);
-  const [showUpdateStatusModal, setShowUpdateStatusModal] = useState(null);
 
   // Get current user from Redux store
   const currentUser = useSelector((state) => state.user?.currentUser);
@@ -158,7 +132,7 @@ const NetworkTopology = () => {
       );
       const interventions = (response.data || []).map((item) => ({
         ...item,
-        technician: item.technician || null, // Ensure technician is null if undefined
+        technician: item.technician || null,
       }));
       setInterventions(interventions);
       setFilteredInterventions(interventions);
@@ -181,7 +155,6 @@ const NetworkTopology = () => {
   useEffect(() => {
     let result = [...interventions];
 
-    // Filter by site name (case-insensitive match or partial match)
     if (filters.siteId) {
       result = result.filter((item) =>
         item.siteId?.toLowerCase().includes(filters.siteId.toLowerCase())
@@ -219,11 +192,7 @@ const NetworkTopology = () => {
         let aValue = a[sortConfig.key];
         let bValue = b[sortConfig.key];
 
-        if (
-          sortConfig.key === 'plannedDate' ||
-          sortConfig.key === 'createdAt' ||
-          sortConfig.key === 'resolvedAt'
-        ) {
+        if (sortConfig.key === 'plannedDate' || sortConfig.key === 'createdAt') {
           aValue = new Date(aValue);
           bValue = new Date(bValue);
         } else if (sortConfig.key === 'siteId') {
@@ -292,47 +261,6 @@ const NetworkTopology = () => {
       setError(null);
     } catch (error) {
       setError(error.message || 'Failed to schedule intervention');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // Resolve intervention
-  const resolveIntervention = async (interventionId, payload) => {
-    setIsSubmitting(true);
-    try {
-      const data = await apiFetch(`${API_URL}/api/interventions/${interventionId}/resolve`, {
-        method: 'PUT',
-        body: JSON.stringify(payload),
-      });
-      setInterventions((prev) =>
-        prev.map((item) => (item._id === interventionId ? data.data : item))
-      );
-      setShowResolveModal(null);
-      setError(null);
-    } catch (error) {
-      setError(error.message || 'Failed to resolve intervention');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // Update intervention status
-  const updateInterventionStatus = async (interventionId, status) => {
-    setIsSubmitting(true);
-    try {
-      const data = await apiFetch(`${API_URL}/api/interventions/${interventionId}`, {
-        method: 'PUT',
-        body: JSON.stringify({ status }),
-      });
-      setInterventions((prev) =>
-        prev.map((item) => (item._id === interventionId ? data.data : item))
-      );
-      setShowUpdateStatusModal(null);
-      setShowResolveModal(null);
-      setError(null);
-    } catch (error) {
-      setError(error.message || 'Failed to update intervention status');
     } finally {
       setIsSubmitting(false);
     }
@@ -924,60 +852,6 @@ const NetworkTopology = () => {
                               />
                             </svg>
                           </button>
-                          {intervention.status !== 'completed' && (
-                            <>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setShowResolveModal(intervention);
-                                }}
-                                disabled={isSubmitting}
-                                className="text-green-600 hover:text-green-900 p-1 rounded-md disabled:text-gray-400 disabled:cursor-not-allowed"
-                                aria-label={`Resolve intervention ${intervention.siteId || 'unknown'}`}
-                              >
-                                <svg
-                                  className="w-5 h-5"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  aria-hidden="true"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth="2"
-                                    d="M5 13l4 4L19 7"
-                                  />
-                                </svg>
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setShowUpdateStatusModal(intervention);
-                                }}
-                                disabled={isSubmitting}
-                                className="text-blue-600 hover:text-blue-900 p-1 rounded-md disabled:text-gray-400 disabled:cursor-not-allowed"
-                                aria-label={`Update status for intervention ${intervention.siteId || 'unknown'}`}
-                              >
-                                <svg
-                                  className="w-5 h-5"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  aria-hidden="true"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth="2"
-                                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15.414H9v-2.828l8.586-8.586z"
-                                  />
-                                </svg>
-                              </button>
-                            </>
-                          )}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1024,22 +898,6 @@ const NetworkTopology = () => {
           <ScheduleIntervention
             onClose={() => setShowScheduleModal(false)}
             onSubmit={scheduleIntervention}
-            isSubmitting={isSubmitting}
-          />
-        )}
-        {showResolveModal && (
-          <ResolveInterventionModal
-            intervention={showResolveModal}
-            onClose={() => setShowResolveModal(null)}
-            onSubmit={(payload) => resolveIntervention(showResolveModal._id, payload)}
-            isSubmitting={isSubmitting}
-          />
-        )}
-        {showUpdateStatusModal && (
-          <UpdateStatusModal
-            intervention={showUpdateStatusModal}
-            onClose={() => setShowUpdateStatusModal(null)}
-            onSubmit={(status) => updateInterventionStatus(showUpdateStatusModal._id, status)}
             isSubmitting={isSubmitting}
           />
         )}

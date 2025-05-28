@@ -153,139 +153,55 @@ const getMaintenanceByEquipment = async (req, res) => {
 // @desc    Update a maintenance record by ID
 // @route   PUT /api/maintenance/:id
 // @access  Private
-const updateMaintenance = async (req, res) => {
+// Update maintenance
+const updateMaintenance = async () => {
+  setError('');
+  setSuccessMessage('');
+
+  if (!formData.description && !formData.performedBy && !formData.status && !formData.scheduledDate) {
+    setError('At least one field is required for update.');
+    return;
+  }
+
+  if (formData.performedBy && !/^[0-9a-fA-F]{24}$/.test(formData.performedBy)) {
+    setError('Please select a valid technician');
+    return;
+  }
+
   try {
-    const { id } = req.params;
-    const { equipmentId, description, performedBy, status, scheduledDate, scheduledTime } = req.body;
+    const updatedData = { ...formData };
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid maintenance ID format',
-      });
-    }
-
-    // Validate at least one field is provided
-    if (!equipmentId && !description && !performedBy && !status && !scheduledDate && !scheduledTime) {
-      return res.status(400).json({
-        success: false,
-        message: 'At least one field must be provided for update',
-      });
-    }
-
-    const updatedFields = {};
-
-    // Validate and set equipmentId
-    if (equipmentId) {
-      if (!mongoose.Types.ObjectId.isValid(equipmentId)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid equipmentId format',
-        });
+    if (formData.scheduledDate) {
+      const scheduledDate = moment(formData.scheduledDate, 'YYYY-MM-DD').tz('Europe/Paris', true);
+      if (!scheduledDate.isValid()) {
+        setError('Scheduled date must be in YYYY-MM-DD format');
+        return;
       }
-      updatedFields.equipmentId = equipmentId;
-    }
+      // Keep scheduledDate as YYYY-MM-DD string
+      updatedData.scheduledDate = scheduledDate.format('YYYY-MM-DD');
 
-    // Validate and set description
-    if (description) {
-      if (description.length < 5) {
-        return res.status(400).json({
-          success: false,
-          message: 'Description must be at least 5 characters',
-        });
-      }
-      updatedFields.description = description;
-    }
-
-    // Validate and set performedBy
-    if (performedBy) {
-      if (!mongoose.Types.ObjectId.isValid(performedBy)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid technician ID format',
-        });
-      }
-      const technician = await User.findOne({ _id: performedBy, role: 'technician' });
-      if (!technician) {
-        return res.status(400).json({
-          success: false,
-          message: 'Technician not found or not a technician',
-        });
-      }
-      updatedFields.performedBy = performedBy;
-    }
-
-    // Validate and set status
-    if (status) {
-      if (!['pending', 'in progress', 'completed'].includes(status)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Status must be pending, in progress, or completed',
-        });
-      }
-      updatedFields.status = status;
-    }
-
-    // Validate and set scheduledDate and performedAt
-    if (scheduledDate) {
-      const isValidDateFormat = (date) => /^\d{4}-\d{2}-\d{2}$/.test(date);
-      const isValidTimeFormat = (time) => /^\d{2}:\d{2}:\d{2}$/.test(time);
-
-      if (!isValidDateFormat(scheduledDate)) {
-        return res.status(400).json({
-          success: false,
-          message: 'scheduledDate must be in YYYY-MM-DD format',
-        });
-      }
-      if (scheduledTime && !isValidTimeFormat(scheduledTime)) {
-        return res.status(400).json({
-          success: false,
-          message: 'scheduledTime must be in HH:mm:ss format',
-        });
-      }
-
-      updatedFields.scheduledDate = new Date(`${scheduledDate}T00:00:00+02:00`);
-      if (scheduledTime) {
-        const performedAt = new Date(`${scheduledDate}T${scheduledTime}+02:00`);
-        if (isNaN(performedAt.getTime())) {
-          return res.status(400).json({
-            success: false,
-            message: 'Invalid date or time format',
-          });
+      if (formData.scheduledTime) {
+        const time = moment(formData.scheduledTime, 'HH:mm');
+        if (!time.isValid()) {
+          setError('Scheduled time must be in HH:mm format');
+          return;
         }
-        updatedFields.performedAt = performedAt;
-        updatedFields.scheduledTime = scheduledTime;
+        updatedData.scheduledTime = time.format('HH:mm:ss');
       } else {
-        updatedFields.scheduledTime = '';
+        updatedData.scheduledTime = undefined;
       }
     }
 
-    const updated = await Maintenance.findByIdAndUpdate(id, updatedFields, {
-      new: true,
-      runValidators: true,
-    })
-      .populate('equipmentId', 'name type serialNumber')
-      .populate('performedBy', 'name email')
-      .lean();
-
-    if (!updated) {
-      return res.status(404).json({
-        success: false,
-        message: 'Maintenance record not found',
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      data: updated,
-    });
-  } catch (error) {
-    console.error('Update maintenance error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error updating maintenance',
-      error: error.message,
-    });
+    const response = await axios.put(`/api/maintenance/${showEditModal}`, updatedData);
+    setMaintenances(maintenances.map(m => (m._id === showEditModal ? response.data : m)));
+    setSuccessMessage('Maintenance updated successfully');
+    setTimeout(() => setSuccessMessage(''), 3000);
+    setShowEditModal(null);
+    resetForm();
+    fetchMaintenances();
+  } catch (err) {
+    console.error('Update maintenance error:', err.response?.data || err.message);
+    setError('Failed to update maintenance: ' + (err.response?.data?.message || err.message));
   }
 };
 

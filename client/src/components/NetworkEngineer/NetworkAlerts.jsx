@@ -13,7 +13,6 @@ import {
   FiCalendar,
   FiPlus,
   FiTrash2,
-  FiEye,
 } from 'react-icons/fi';
 import CreateAlert from './CreateAlert';
 import ResolveByType from './ResolveByType';
@@ -21,13 +20,13 @@ import DeleteAlert from './DeleteAlert';
 import AcknowledgeAlert from './AcknowledgeAlert';
 import DetailAlert from './DetailAlert';
 
-
-const isValidObjectId = (id) => /^[0-9a-fA-F]{24}$/.test(id);
+// Validate site_reference format (e.g., "SITE001")
+const isValidSiteReference = (siteId) => /^[A-Z0-9]+$/.test(siteId);
 
 const NetworkAlerts = () => {
   const [alerts, setAlerts] = useState([]);
   const [siteId, setSiteId] = useState('');
-  const [filter, setFilter] = useState('active');
+  const [filter, setFilter] = useState('history'); // Default to 'history'
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [loading, setLoading] = useState(false);
@@ -40,160 +39,183 @@ const NetworkAlerts = () => {
   const [selectedAlert, setSelectedAlert] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [resolving, setResolving] = useState(null);
+  const [siteReferences, setSiteReferences] = useState([]);
 
   axios.defaults.baseURL = 'http://localhost:3000';
 
-const fetchAlerts = async () => {
-  setLoading(true);
-  setError('');
-  setSuccessMessage('');
-
-  try {
-    let url = '/api/alerts';
-
-    if (siteId && !isValidObjectId(siteId)) {
-      setError('Invalid site ID format');
-      setLoading(false);
-      return;
-    }
-
-    if (siteId) {
-      switch (filter) {
-        case 'active':
-          url = `/api/alerts/active/${siteId}`;
-          break;
-        case 'resolved':
-          url = `/api/alerts/history/resolved/${siteId}`;
-          break;
-        case 'history':
-          url = `/api/alerts/history/${siteId}`;
-          break;
-        default:
-          setError('Invalid filter configuration');
-          setLoading(false);
-          return;
+  // Fetch site references for dropdown
+  useEffect(() => {
+    const fetchSiteReferences = async () => {
+      try {
+        const response = await axios.get('/api/sites/references');
+        setSiteReferences(response.data);
+      } catch (error) {
+        console.error('Failed to fetch site references:', error);
+        setError('Failed to fetch site references. Using fallback options.');
+        // Fallback to known site references
+        setSiteReferences(['SITE001', 'SITE002']);
       }
-    } else {
-      switch (filter) {
-        case 'active':
-          url = '/api/alerts';
-          break;
-        case 'resolved':
-          url = '/api/alerts/resolved';
-          break;
-        case 'history':
-          url = '/api/alerts/history';
-          break;
-        default:
-          setError('Invalid filter configuration');
-          setLoading(false);
-          return;
-      }
-    }
+    };
+    fetchSiteReferences();
+  }, []);
 
-    if (filter === 'resolved' && startDate && endDate) {
-      if (isInvalidDateRange(startDate, endDate)) {
-        setError('End date cannot be before start date');
+  const fetchAlerts = async () => {
+    setLoading(true);
+    setError('');
+    setSuccessMessage('');
+
+    try {
+      let url = '/api/alerts/history'; // Default to history endpoint
+
+      // Validate siteId if provided
+      if (siteId && !isValidSiteReference(siteId)) {
+        setError('Invalid site reference format (e.g., SITE001)');
         setLoading(false);
         return;
       }
-      const params = new URLSearchParams();
-      params.append('startDate', startDate);
-      params.append('endDate', endDate);
-      url += `?${params.toString()}`;
+
+      if (siteId) {
+        switch (filter) {
+          case 'active':
+            url = `/api/alerts/active/${siteId}`;
+            break;
+          case 'resolved':
+            url = `/api/alerts/history/resolved/${siteId}`;
+            break;
+          case 'history':
+            url = `/api/alerts/history/${siteId}`;
+            break;
+          default:
+            setError('Invalid filter configuration');
+            setLoading(false);
+            return;
+        }
+      } else {
+        switch (filter) {
+          case 'active':
+            url = '/api/alerts';
+            break;
+          case 'resolved':
+            url = '/api/alerts/resolved';
+            break;
+          case 'history':
+            url = '/api/alerts/history';
+            break;
+          default:
+            setError('Invalid filter configuration');
+            setLoading(false);
+            return;
+        }
+      }
+
+      // Apply date range for 'resolved' or 'history' filters
+      if ((filter === 'resolved' || filter === 'history') && startDate && endDate) {
+        if (new Date(endDate) < new Date(startDate)) {
+          setError('End date cannot be before start date');
+          setLoading(false);
+          return;
+        }
+        const params = new URLSearchParams();
+        params.append('startDate', startDate);
+        params.append('endDate', endDate);
+        url += `?${params.toString()}`;
+      }
+
+      console.log(`Fetching alerts from: ${url}`);
+      const response = await axios.get(url);
+      const normalizedAlerts = Array.isArray(response.data)
+        ? response.data.map((alert) => ({
+            ...alert,
+            siteId: alert.siteId || 'N/A',
+          }))
+        : [];
+      setAlerts(normalizedAlerts);
+      console.log('Fetched alerts:', normalizedAlerts);
+    } catch (err) {
+      console.error('Fetch alerts error:', err.response?.data || err.message);
+      if (err.response?.status === 404) {
+        setError('No alerts found for the specified criteria.');
+        setAlerts([]);
+      } else {
+        setError(`Failed to fetch alerts: ${err.response?.data?.message || err.message}`);
+      }
+    } finally {
+      setLoading(false);
     }
-
-    const response = await axios.get(url);
-    const normalizedAlerts = Array.isArray(response.data)
-      ? response.data.map((alert) => ({
-          ...alert,
-          siteId: alert.siteId?._id || alert.siteId,
-        }))
-      : [];
-    setAlerts(normalizedAlerts);
-  } catch (err) {
-    if (err.response?.status === 404) {
-      setError('The requested alerts endpoint is not available. Try a different filter or check the backend configuration.');
-      setAlerts([]);
-    } else {
-      setError(`Failed to fetch alerts: ${err.response?.data?.message || err.message}`);
-    }
-  } finally {
-    setLoading(false);
-  }
-};
-
-
+  };
 
   const resolveAlert = async (id) => {
-  if (!isValidObjectId(id)) {
-    setError('Invalid alert ID format');
-    return;
-  }
+    setResolving(id);
+    setError('');
+    setSuccessMessage('');
 
-  setResolving(id);
-  setError('');
-  setSuccessMessage('');
-
-  // Optimistic update
-  setAlerts((prevAlerts) =>
-    prevAlerts.map((alert) =>
-      alert._id === id
-        ? { ...alert, status: 'resolved', resolvedAt: new Date().toISOString() }
-        : alert
-    )
-  );
-
-  try {
-    const response = await axios.put(`/api/alerts/resolve/${id}`);
-    const updatedAlert = response.data.alert; // Use response.data.alert
-
+    // Optimistic update
     setAlerts((prevAlerts) =>
       prevAlerts.map((alert) =>
         alert._id === id
-          ? {
-              ...alert,
-              status: updatedAlert.status,
-              resolvedAt: updatedAlert.resolvedAt,
-              siteId: updatedAlert.siteId?._id || alert.siteId, // Ensure siteId remains a string
-            }
+          ? { ...alert, status: 'resolved', resolvedAt: new Date().toISOString() }
           : alert
       )
     );
-    setSuccessMessage('Alert resolved successfully');
-    setTimeout(() => setSuccessMessage(''), 3000);
-  } catch (err) {
-    // Rollback optimistic update
-    setAlerts((prevAlerts) =>
-      prevAlerts.map((alert) =>
-        alert._id === id ? { ...alert, status: 'active', resolvedAt: null } : alert
-      )
-    );
-    setError(`Failed to resolve alert: ${err.response?.data?.message || err.message}`);
-  } finally {
-    setResolving(null);
-  }
-};
 
- useEffect(() => {
-  const filtered = alerts.filter((alert) => {
-    const query = searchQuery?.toLowerCase() || '';
-    const siteIdStr = alert.siteId || ''; // Fallback to empty string if undefined
-    return (
-      siteIdStr.toLowerCase().includes(query) ||
-      (alert.type || '').toLowerCase().includes(query) ||
-      (alert.message || '').toLowerCase().includes(query)
-    );
-  });
-  setFilteredAlerts(filtered);
-}, [alerts, searchQuery]);
+    try {
+      const response = await axios.put(`/api/alerts/resolve/${id}`);
+      const updatedAlert = response.data.alert;
+
+      setAlerts((prevAlerts) =>
+        prevAlerts.map((alert) =>
+          alert._id === id
+            ? {
+                ...alert,
+                status: updatedAlert.status,
+                resolvedAt: updatedAlert.resolvedAt,
+              }
+            : alert
+        )
+      );
+      setSuccessMessage('Alert resolved successfully');
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (err) {
+      // Rollback optimistic update
+      setAlerts((prevAlerts) =>
+        prevAlerts.map((alert) =>
+          alert._id === id ? { ...alert, status: 'active', resolvedAt: null } : alert
+        )
+      );
+      setError(`Failed to resolve alert: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setResolving(null);
+    }
+  };
+
+  useEffect(() => {
+    const filtered = alerts.filter((alert) => {
+      const query = searchQuery?.toLowerCase() || '';
+      const siteIdStr = alert.siteId || '';
+      return (
+        siteIdStr.toLowerCase().includes(query) ||
+        (alert.type || '').toLowerCase().includes(query) ||
+        (alert.message || '').toLowerCase().includes(query)
+      );
+    });
+    setFilteredAlerts(filtered);
+  }, [alerts, searchQuery]);
 
   useEffect(() => {
     fetchAlerts();
   }, [siteId, filter, startDate, endDate]);
 
+  const handleFilterChange = (e) => {
+    const newFilter = e.target.value;
+    setFilter(newFilter);
+    if (newFilter === 'active') {
+      setStartDate('');
+      setEndDate('');
+    }
+  };
+
   const handleCreateSuccess = (newAlert, message) => {
-    setAlerts([...alerts, newAlert]);
+    setAlerts([...alerts, { ...newAlert, siteId: newAlert.siteId || 'N/A' }]);
     setSuccessMessage(message);
     setTimeout(() => setSuccessMessage(''), 3000);
   };
@@ -314,26 +336,31 @@ const fetchAlerts = async () => {
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Site ID</label>
-              <input
-                type="text"
+              <label className="block text-sm font-medium text-gray-700 mb-1">Site Reference</label>
+              <select
                 value={siteId}
                 onChange={(e) => setSiteId(e.target.value)}
-                placeholder="All sites"
-                className="focus:ring-indigo-500 focus:border-indigo-500 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
-              />
+                className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-3 pr-10 py-2 border border-gray-300 rounded-md"
+              >
+                <option value="">All sites</option>
+                {siteReferences.map((ref) => (
+                  <option key={ref} value={ref}>
+                    {ref}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
               <div className="relative">
                 <select
                   value={filter}
-                  onChange={(e) => setFilter(e.target.value)}
+                  onChange={handleFilterChange}
                   className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-3 pr-10 py-2 border border-gray-300 rounded-md appearance-none"
                 >
+                  <option value="history">All Alerts</option>
                   <option value="active">Active Alerts</option>
                   <option value="resolved">Resolved Alerts</option>
-                  <option value="history">All Alerts</option>
                 </select>
                 <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
                   <FiFilter className="text-gray-400" />
@@ -349,7 +376,7 @@ const fetchAlerts = async () => {
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
                     className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-3 pr-10 py-2 border border-gray-300 rounded-md"
-                    disabled={filter !== 'resolved'}
+                    disabled={filter === 'active'}
                   />
                   <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
                     <FiCalendar className="text-gray-400" />
@@ -361,7 +388,7 @@ const fetchAlerts = async () => {
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
                     className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-3 pr-10 py-2 border border-gray-300 rounded-md"
-                    disabled={filter !== 'resolved'}
+                    disabled={filter === 'active'}
                   />
                   <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
                     <FiCalendar className="text-gray-400" />
@@ -377,6 +404,7 @@ const fetchAlerts = async () => {
           onClose={() => setShowCreateModal(false)}
           onSuccess={handleCreateSuccess}
           onError={setError}
+          siteReferences={siteReferences}
         />
 
         <ResolveByType
@@ -384,6 +412,7 @@ const fetchAlerts = async () => {
           onClose={() => setShowResolveByTypeModal(false)}
           onSuccess={handleResolveByTypeSuccess}
           onError={setError}
+          siteReferences={siteReferences}
         />
 
         <DetailAlert
@@ -415,7 +444,7 @@ const fetchAlerts = async () => {
                       scope="col"
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                     >
-                      Site ID
+                      Site Reference
                     </th>
                     <th
                       scope="col"
@@ -524,23 +553,23 @@ const fetchAlerts = async () => {
                                     onError={setError}
                                   />
                                 )}
- <button
-  onClick={(e) => {
-    e.stopPropagation();
-    resolveAlert(alert._id);
-  }}
-  className={`flex items-center text-green-600 hover:text-green-900 ${
-    resolving === alert._id ? 'opacity-50 cursor-not-allowed' : ''
-  }`}
-  title="Resolve"
-  disabled={resolving === alert._id}
->
-  {resolving === alert._id ? (
-    <FiRefreshCw className="h-5 w-5 animate-spin" />
-  ) : (
-    <FiCheckCircle className="h-5 w-5" />
-  )}
-</button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    resolveAlert(alert._id);
+                                  }}
+                                  className={`flex items-center text-green-600 hover:text-green-900 ${
+                                    resolving === alert._id ? 'opacity-50 cursor-not-allowed' : ''
+                                  }`}
+                                  title="Resolve"
+                                  disabled={resolving === alert._id}
+                                >
+                                  {resolving === alert._id ? (
+                                    <FiRefreshCw className="h-5 w-5 animate-spin" />
+                                  ) : (
+                                    <FiCheckCircle className="h-5 w-5" />
+                                  )}
+                                </button>
                               </>
                             )}
                             <DeleteAlert

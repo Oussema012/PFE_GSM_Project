@@ -10,7 +10,8 @@ import {
   FaSearch,
   FaNetworkWired,
   FaProjectDiagram,
-  FaTools
+  FaTools,
+  FaChartPie // New icon for Statistics Dashboard
 } from "react-icons/fa";
 import axios from 'axios';
 import NetworkOverview from "../components/NetworkEngineer/NetworkOverview";
@@ -20,6 +21,7 @@ import NetworkReports from "../components/NetworkEngineer/NetworkReports";
 import NetworkAlerts from "../components/NetworkEngineer/NetworkAlerts";
 import NetworkSettings from "../components/NetworkEngineer/NetworkSettings";
 import Notifications from "../components/NetworkEngineer/Notification";
+import StatisticsDashboard from "../components/NetworkEngineer/StatisticsDashboard"; // New component
 
 const NotificationDropdown = ({ onClose }) => {
   const [notifications, setNotifications] = useState([]);
@@ -247,6 +249,7 @@ const NetworkEngineerDashboard = () => {
               { tab: 'alerts', icon: FaBell, text: 'Network Alerts', badge: networkStats.networkAlerts },
               { tab: 'notifications', icon: FaBell, text: 'Notifications', badge: unreadCount },
               { tab: 'tools', icon: FaTools, text: 'Network Tools', badge: null },
+              { tab: 'statistics', icon: FaChartPie, text: 'Statistics Dashboard', badge: null } // New tab
             ].map(({ tab, icon: Icon, text, badge }) => (
               <li key={tab}>
                 <Link 
@@ -329,6 +332,7 @@ const NetworkEngineerDashboard = () => {
           {activeTab === 'alerts' && <NetworkAlerts />}
           {activeTab === 'notifications' && <Notifications />}
           {activeTab === 'tools' && <NetworkSettings />}
+          {activeTab === 'statistics' && <StatisticsDashboard />} {/* New element */}
         </main>
       </div>
     </div>

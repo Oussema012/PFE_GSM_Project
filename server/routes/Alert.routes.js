@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const AlertController = require('../controllers/AlertController');
-
 // POST /api/alerts → create alert
 router.post('/', AlertController.createAlert);
 
@@ -13,7 +12,7 @@ router.get('/active/:siteId', AlertController.getActiveAlertsBySite);
 
 // PUT /api/alerts/resolve/:id → resolve an alert by ID
 router.put('/resolve/:id', AlertController.resolveAlert);
-router.put('/:id/resolve', AlertController.resolveAlert);
+//router.put('/:id/resolve', AlertController.resolveAlert);
 // DELETE /api/alerts/:id → delete an alert by ID
 router.delete('/:id', AlertController.deleteAlert);
 
@@ -21,10 +20,10 @@ router.delete('/:id', AlertController.deleteAlert);
 router.get('/history/:siteId', AlertController.getAlertHistory);
 
 // GET /api/alerts/resolved/:siteId → get resolved alerts for a site
-router.get('/resolved/:siteId', AlertController.getResolvedAlerts);
 
 // GET /api/alerts/resolved → get all resolved alerts
 router.get('/resolved', AlertController.getAllResolvedAlerts);
+router.get('/resolved/:siteId', AlertController.getResolvedAlerts);
 
 // GET /api/alerts/history/resolved/:siteId → get resolved alerts history by siteId and optional date range
 router.get('/history/resolved/:siteId', AlertController.getResolvedAlertsHistory);
@@ -34,8 +33,7 @@ router.put('/resolve-by-type', AlertController.resolveAlertByType);
 
 // PUT /api/alerts/acknowledge/:id → acknowledge an alert by ID
 router.put('/acknowledge/:id', AlertController.acknowledgeAlert);
-router.put('/:id/acknowledge', AlertController.acknowledgeAlert);
+//router.put('/:id/acknowledge', AlertController.acknowledgeAlert);
 // New route for all alerts history (no siteId)
 router.get('/history', AlertController.getAllAlertsHistory);
-
 module.exports = router;

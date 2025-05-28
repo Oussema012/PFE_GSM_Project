@@ -3,6 +3,7 @@ const router = express.Router();
 const InterventionController = require('../controllers/InterventionController');
 
 // POST → Create intervention
+router.get('/all', InterventionController.getAllInterventions);
 router.post('/', InterventionController.createIntervention);
 router.get('/', InterventionController.getInterventionsByCreator);
 router.get('/tech', InterventionController.getInterventionsByTechnician);
@@ -13,6 +14,8 @@ router.delete('/:id', InterventionController.deleteIntervention);
 router.get('/:id', InterventionController.getInterventionById);
 router.get('/site/:siteId', InterventionController.getInterventionsBySite);
 router.get('/completed', InterventionController.getCompletedInterventions);
+
+
 
 
 

@@ -255,3 +255,12 @@ exports.assignTechnicianToSites = async (req, res) => {
     res.status(500).json({ message: 'Error assigning technician to sites', error: error.message });
   }
 };
+exports.getSiteReferences = async (req, res) => {
+  try {
+    const sites = await Site.find({}, '_id site_reference').lean();
+    res.status(200).json(sites); // Returns [{ _id, site_reference }, ...]
+  } catch (error) {
+    console.error('Error fetching site references:', error);
+    res.status(500).json({ message: 'Error fetching site references', error: error.message });
+  }
+};

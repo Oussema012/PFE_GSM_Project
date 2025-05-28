@@ -277,8 +277,8 @@ const NetworkSettings = () => {
                 <p className="text-sm text-gray-600 flex items-center">
                   <FiClock className="mr-1" />
                   {maintenance.performedAt
-                    ? moment(maintenance.performedAt).tz('Europe/Paris').format('MMM D, YYYY h:mm A')
-                    : moment(maintenance.scheduledDate).tz('Europe/Paris').format('MMM D, YYYY')}
+                    ? moment(maintenance.performedAt).tz('Europe/Paris').format('YYYY-MM-DD h:mm A')
+                    : moment(maintenance.scheduledDate).tz('Europe/Paris').format('YYYY-MM-DD')}
                 </p>
                 <p className="text-sm font-medium mt-1">
                   Status: {maintenance.status
@@ -622,7 +622,7 @@ const NetworkSettings = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Scheduled Date</label>
                   <p className="mt-1 text-sm text-gray-600">
-                    {moment(showDetailsModal.scheduledDate).tz('Europe/Paris').format('MMM D, YYYY')}
+                    {moment(showDetailsModal.scheduledDate).tz('Europe/Paris').format('YYYY-MM-DD')}
                   </p>
                 </div>
                 {showDetailsModal.scheduledTime && (

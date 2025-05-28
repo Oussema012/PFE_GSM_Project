@@ -501,6 +501,30 @@ exports.getCompletedInterventions = async (req, res) => {
 };
 
 
+exports.getAllInterventions = async (req, res) => {
+  try {
+    const interventions = await Intervention.find()
+      .populate('technician', 'name email')
+      .populate('createdBy', 'name email')
+      .sort({ createdAt: -1 }); // newest interventions first
+
+    res.status(200).json({
+      success: true,
+      message: interventions.length
+        ? 'All interventions retrieved successfully'
+        : 'No interventions found',
+      data: interventions,
+    });
+  } catch (error) {
+    console.error('Error retrieving all interventions:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error retrieving all interventions',
+      error: error.message,
+    });
+  }
+};
+
 
 
 
