@@ -1,47 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
-import { FiPlus, FiEdit, FiTrash2, FiCheckCircle, FiAlertCircle, FiClock, FiEye } from 'react-icons/fi';
+import axios from 'axios';
+import {
+  FiPlus,
+  FiEdit,
+  FiTrash2,
+  FiCheckCircle,
+  FiAlertCircle,
+  FiClock,
+  FiEye
+} from 'react-icons/fi';
+import { FaWrench } from 'react-icons/fa';
 import moment from 'moment';
 import 'moment-timezone';
-import 'leaflet/dist/leaflet.css';
 
-// Fix for Leaflet marker icons
-import L from 'leaflet';
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-});
+// Set axios base URL
+axios.defaults.baseURL = 'http://localhost:3000';
 
-// Mock data for maintenances and technicians with Tunisian coordinates
-const mockMaintenances = [
-  {
-    _id: '1',
-    equipmentId: { _id: 'eq1', name: 'Server A', serialNumber: 'SRV001', location: { lat: 36.806389, lng: 10.181667 } }, // Tunis
-    description: 'Server maintenance check',
-    performedBy: { _id: 'tech1', name: 'John Doe', email: 'john@example.com' },
-    status: 'pending',
-    scheduledDate: '2025-05-30',
-    scheduledTime: '09:00:00',
-  },
-  {
-    _id: '2',
-    equipmentId: { _id: 'eq2', name: 'Router B', serialNumber: 'RTR002', location: { lat: 36.713432, lng: 10.209552 } }, // El Mourouj
-    description: 'Router firmware update',
-    performedBy: { _id: 'tech2', name: 'Jane Smith', email: 'jane@example.com' },
-    status: 'in progress',
-    scheduledDate: '2025-05-31',
-    scheduledTime: '14:30:00',
-  },
-];
-
-const mockTechnicians = [
-  { _id: 'tech1', name: 'John Doe', email: 'john@example.com' },
-  { _id: 'tech2', name: 'Jane Smith', email: 'jane@example.com' },
-];
-
-const MapSite = () => {
+const DashMapSites = () => {
   const [maintenances, setMaintenances] = useState([]);
   const [technicians, setTechnicians] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -51,44 +26,45 @@ const MapSite = () => {
   const [showEditModal, setShowEditModal] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(null);
+
   const [formData, setFormData] = useState({
     equipmentId: '',
-    equipmentName: '',
-    serialNumber: '',
-    lat: '',
-    lng: '',
     description: '',
     performedBy: '',
     status: 'pending',
-    scheduledDate: moment().tz('Africa/Tunis').format('YYYY-MM-DD'),
+    scheduledDate: moment().tz('Europe/Paris').format('YYYY-MM-DD'),
     scheduledTime: '',
   });
 
-  // Fetch maintenances (mock data)
+  // Fetch all maintenance records
   const fetchMaintenances = async () => {
     setLoading(true);
     setError('');
     try {
-      // Simulate API call
-      setTimeout(() => {
-        setMaintenances(mockMaintenances);
-        setLoading(false);
-      }, 500);
+      const response = await axios.get('/api/maintenance');
+      if (!Array.isArray(response.data)) {
+        throw new Error('Maintenance data is not an array');
+      }
+      setMaintenances(response.data);
     } catch (err) {
-      setError('Failed to fetch maintenance records');
+      console.error('Fetch maintenances error:', err.response?.data || err.message);
+      setError('Failed to fetch maintenance records: ' + (err.response?.data?.message || err.message));
+    } finally {
       setLoading(false);
     }
   };
 
-  // Fetch technicians (mock data)
+  // Fetch all technicians
   const fetchTechnicians = async () => {
     try {
-      // Simulate API call
-      setTimeout(() => {
-        setTechnicians(mockTechnicians);
-      }, 500);
+      const response = await axios.get('/api/technicians');
+      if (!response.data.success || !Array.isArray(response.data.data)) {
+        throw new Error('Technician data is invalid');
+      }
+      setTechnicians(response.data.data);
     } catch (err) {
-      setError('Failed to fetch technicians');
+      console.error('Fetch technicians error:', err.response?.data || err.message);
+      setError('Failed to fetch technicians: ' + (err.response?.data?.message || err.message));
     }
   };
 
@@ -98,26 +74,20 @@ const MapSite = () => {
     setSuccessMessage('');
     try {
       // Validate required fields
-      if (!formData.equipmentId || !formData.equipmentName || !formData.description || !formData.performedBy || !formData.lat || !formData.lng) {
-        setError('All fields except serial number and time are required.');
+      if (!formData.equipmentId || !formData.description || !formData.performedBy) {
+        setError('Equipment ID, description, and technician are required.');
         return;
       }
 
-      // Validate ObjectId format for equipmentId and performedBy
+      // Validate equipmentId format
       if (!/^[0-9a-fA-F]{24}$/.test(formData.equipmentId)) {
         setError('Invalid Equipment ID format');
         return;
       }
+
+      // Validate performedBy (must be a valid ObjectId)
       if (!/^[0-9a-fA-F]{24}$/.test(formData.performedBy)) {
         setError('Please select a valid technician');
-        return;
-      }
-
-      // Validate coordinates
-      const lat = parseFloat(formData.lat);
-      const lng = parseFloat(formData.lng);
-      if (isNaN(lat) || lat < -90 || lat > 90 || isNaN(lng) || lng < -180 || lng > 180) {
-        setError('Invalid latitude or longitude');
         return;
       }
 
@@ -133,34 +103,29 @@ const MapSite = () => {
       if (formData.scheduledTime) {
         const time = moment(formData.scheduledTime, 'HH:mm');
         if (!time.isValid()) {
-          setError('Scheduled time must be in HH:mm format');
+          setError('Scheduled time must be in HH:mm format (e.g., 17:00 for 5:00 PM, 01:00 for 1:00 AM)');
           return;
         }
         scheduledTime = time.format('HH:mm:ss');
       }
 
-      const newMaintenance = {
-        _id: `m${Date.now()}`, // Generate a mock ID
-        equipmentId: {
-          _id: formData.equipmentId,
-          name: formData.equipmentName,
-          serialNumber: formData.serialNumber || 'N/A',
-          location: { lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) },
-        },
-        description: formData.description,
-        performedBy: technicians.find(tech => tech._id === formData.performedBy) || { _id: formData.performedBy, name: 'Unknown' },
-        status: formData.status,
+      const payload = {
+        ...formData,
         scheduledDate,
         scheduledTime: scheduledTime || undefined,
       };
 
-      setMaintenances([...maintenances, newMaintenance]);
+      console.log('Sending payload:', payload);
+      const response = await axios.post('/api/maintenance', payload);
+      setMaintenances([...maintenances, response.data]);
       setSuccessMessage('Maintenance added successfully');
       setTimeout(() => setSuccessMessage(''), 3000);
       setShowAddModal(false);
       resetForm();
+      fetchMaintenances();
     } catch (err) {
-      setError('Failed to add maintenance: ' + err.message);
+      console.error('Add maintenance error:', err.response?.data || err.message);
+      setError('Failed to add maintenance: ' + (err.response?.data?.message || err.message));
     }
   };
 
@@ -168,69 +133,50 @@ const MapSite = () => {
   const updateMaintenance = async () => {
     setError('');
     setSuccessMessage('');
+
+    if (!formData.description && !formData.performedBy && !formData.status && !formData.scheduledDate) {
+      setError('At least one field is required for update.');
+      return;
+    }
+
+    if (formData.performedBy && !/^[0-9a-fA-F]{24}$/.test(formData.performedBy)) {
+      setError('Please select a valid technician');
+      return;
+    }
+
     try {
-      // Validate fields
-      if (!formData.description && !formData.performedBy && !formData.status && !formData.scheduledDate && !formData.lat && !formData.lng) {
-        setError('At least one field is required for update.');
-        return;
-      }
+      const updatedData = { ...formData };
 
-      if (formData.performedBy && !/^[0-9a-fA-F]{24}$/.test(formData.performedBy)) {
-        setError('Please select a valid technician');
-        return;
-      }
-
-      if (formData.lat || formData.lng) {
-        const lat = parseFloat(formData.lat);
-        const lng = parseFloat(formData.lng);
-        if (isNaN(lat) || lat < -90 || lat > 90 || isNaN(lng) || lng < -180 || lng > 180) {
-          setError('Invalid latitude or longitude');
+      if (formData.scheduledDate) {
+        const scheduledDate = moment(formData.scheduledDate, 'YYYY-MM-DD').tz('Europe/Paris', true);
+        if (!scheduledDate.isValid()) {
+          setError('Scheduled date must be in YYYY-MM-DD format');
           return;
+        }
+        updatedData.scheduledDate = scheduledDate.toISOString();
+
+        if (formData.scheduledTime) {
+          const time = moment(formData.scheduledTime, 'HH:mm');
+          if (!time.isValid()) {
+            setError('Scheduled time must be in HH:mm format');
+            return;
+          }
+          updatedData.scheduledTime = time.format('HH:mm:ss');
+        } else {
+          updatedData.scheduledTime = undefined;
         }
       }
 
-      const scheduledDate = moment(formData.scheduledDate, 'YYYY-MM-DD').format('YYYY-MM-DD');
-      if (!moment(scheduledDate, 'YYYY-MM-DD', true).isValid()) {
-        setError('Scheduled date must be in YYYY-MM-DD format');
-        return;
-      }
-
-      let scheduledTime = '';
-      if (formData.scheduledTime) {
-        const time = moment(formData.scheduledTime, 'HH:mm');
-        if (!time.isValid()) {
-          setError('Scheduled time must be in HH:mm format');
-          return;
-        }
-        scheduledTime = time.format('HH:mm:ss');
-      }
-
-      const updatedMaintenance = {
-        ...maintenances.find(m => m._id === showEditModal),
-        equipmentId: {
-          ...maintenances.find(m => m._id === showEditModal).equipmentId,
-          name: formData.equipmentName || maintenances.find(m => m._id === showEditModal).equipmentId.name,
-          location: {
-            lat: parseFloat(formData.lat) || maintenances.find(m => m._id === showEditModal).equipmentId.location.lat,
-            lng: parseFloat(formData.lng) || maintenances.find(m => m._id === showEditModal).equipmentId.location.lng,
-          },
-        },
-        description: formData.description || maintenances.find(m => m._id === showEditModal).description,
-        performedBy: formData.performedBy
-          ? technicians.find(tech => tech._id === formData.performedBy) || { _id: formData.performedBy, name: 'Unknown' }
-          : maintenances.find(m => m._id === showEditModal).performedBy,
-        status: formData.status || maintenances.find(m => m._id === showEditModal).status,
-        scheduledDate,
-        scheduledTime: scheduledTime || maintenances.find(m => m._id === showEditModal).scheduledTime,
-      };
-
-      setMaintenances(maintenances.map(m => (m._id === showEditModal ? updatedMaintenance : m)));
+      const response = await axios.put(`/api/maintenance/${showEditModal}`, updatedData);
+      setMaintenances(maintenances.map(m => (m._id === showEditModal ? response.data : m)));
       setSuccessMessage('Maintenance updated successfully');
       setTimeout(() => setSuccessMessage(''), 3000);
       setShowEditModal(null);
       resetForm();
+      fetchMaintenances();
     } catch (err) {
-      setError('Failed to update maintenance: ' + err.message);
+      console.error('Update maintenance error:', err.response?.data || err.message);
+      setError('Failed to update maintenance: ' + (err.response?.data?.message || err.message));
     }
   };
 
@@ -239,12 +185,14 @@ const MapSite = () => {
     setError('');
     setSuccessMessage('');
     try {
+      await axios.delete(`/api/maintenance/${showDeleteModal}`);
       setMaintenances(maintenances.filter(m => m._id !== showDeleteModal));
       setSuccessMessage('Maintenance deleted successfully');
       setTimeout(() => setSuccessMessage(''), 3000);
       setShowDeleteModal(null);
     } catch (err) {
-      setError('Failed to delete maintenance: ' + err.message);
+      console.error('Delete maintenance error:', err.response?.data || err.message);
+      setError('Failed to delete maintenance: ' + (err.response?.data?.message || err.message));
     }
   };
 
@@ -252,14 +200,10 @@ const MapSite = () => {
   const resetForm = () => {
     setFormData({
       equipmentId: '',
-      equipmentName: '',
-      serialNumber: '',
-      lat: '',
-      lng: '',
       description: '',
       performedBy: '',
       status: 'pending',
-      scheduledDate: moment().tz('Africa/Tunis').format('YYYY-MM-DD'),
+      scheduledDate: moment().tz('Europe/Paris').format('YYYY-MM-DD'),
       scheduledTime: '',
     });
   };
@@ -273,23 +217,29 @@ const MapSite = () => {
   // Open edit modal with maintenance data
   const openEditModal = (maintenance) => {
     const dateField = maintenance.performedAt || maintenance.scheduledDate;
-    const date = moment(dateField).tz('Africa/Tunis');
+    const date = moment(dateField).tz('Europe/Paris');
     setFormData({
-      equipmentId: maintenance.equipmentId?._id || '',
-      equipmentName: maintenance.equipmentId?.name || '',
-      serialNumber: maintenance.equipmentId?.serialNumber || '',
-      lat: maintenance.equipmentId?.location?.lat || '',
-      lng: maintenance.equipmentId?.location?.lng || '',
-      description: maintenance.description || '',
-      performedBy: maintenance.performedBy?._id || '',
-      status: maintenance.status || 'pending',
+      equipmentId: maintenance.equipmentId?._id || maintenance.equipmentId,
+      description: maintenance.description,
+      performedBy: maintenance.performedBy?._id || maintenance.performedBy || '',
+      status: maintenance.status,
       scheduledDate: date.format('YYYY-MM-DD'),
-      scheduledTime: maintenance.scheduledTime ? moment(maintenance.scheduledTime, 'HH:mm:ss').format('HH:mm') : '',
+scheduledTime: maintenance.scheduledTime ? moment(maintenance.scheduledTime, 'HH:mm:ss').format('HH:mm') : '',
     });
     setShowEditModal(maintenance._id);
   };
 
-  // Fetch data on component mount
+  // Open details modal
+  const openDetailsModal = (maintenance) => {
+    setShowDetailsModal(maintenance);
+  };
+
+  // Close details modal
+  const closeDetailsModal = () => {
+    setShowDetailsModal(null);
+  };
+
+  // Fetch maintenances and technicians on component mount
   useEffect(() => {
     fetchMaintenances();
     fetchTechnicians();
@@ -297,9 +247,9 @@ const MapSite = () => {
 
   // Render maintenance cards
   const renderCards = () => {
-    const sortedMaintenances = [...maintenances].sort((a, b) =>
-      moment(a.performedAt || a.scheduledDate).diff(moment(b.performedAt || b.scheduledDate))
-    );
+    const sortedMaintenances = [...maintenances].sort((a, b) => {
+      return moment(a.performedAt || a.scheduledDate).diff(moment(b.performedAt || b.scheduledDate));
+    });
 
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -326,16 +276,18 @@ const MapSite = () => {
                 <p className="text-sm text-gray-600 flex items-center">
                   <FiClock className="mr-1" />
                   {maintenance.performedAt
-                    ? moment(maintenance.performedAt).tz('Africa/Tunis').format('YYYY-MM-DD h:mm A')
-                    : moment(maintenance.scheduledDate).tz('Africa/Tunis').format('YYYY-MM-DD')}
+                    ? moment(maintenance.performedAt).tz('Europe/Paris').format('YYYY-MM-DD h:mm A')
+                    : moment(maintenance.scheduledDate).tz('Europe/Paris').format('YYYY-MM-DD')}
                 </p>
                 <p className="text-sm font-medium mt-1">
-                  Status: {maintenance.status.charAt(0).toUpperCase() + maintenance.status.slice(1)}
+                  Status: {maintenance.status
+                    ? maintenance.status.charAt(0).toUpperCase() + maintenance.status.slice(1)
+                    : 'Unknown'}
                 </p>
               </div>
               <div className="flex space-x-2">
                 <button
-                  onClick={() => setShowDetailsModal(maintenance)}
+                  onClick={() => openDetailsModal(maintenance)}
                   className="text-blue-600 hover:text-blue-900"
                   title="See Details"
                 >
@@ -374,45 +326,25 @@ const MapSite = () => {
       <header className="bg-white shadow rounded-lg mb-4">
         <div className="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center">
-            <h1 className="text-xl font-bold text-gray-900">Maintenance Map - Tunisia</h1>
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="flex items-center px-3 py-1 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
-            >
-              <FiPlus className="mr-1" />
-              Add Maintenance
-            </button>
+            <h1 className="text-xl font-bold text-gray-900 flex items-center">
+              <FaWrench className="mr-2 text-indigo-600" />
+              Map Sites Maintenance
+            </h1>
+            <div className="flex space-x-2">
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="flex items-center px-3 py-1 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+              >
+                <FiPlus className="mr-1" />
+                Add Maintenance
+              </button>
+            </div>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto">
-        {/* Map */}
-        <div className="bg-white shadow rounded-lg mb-4">
-          <MapContainer center={[36.806389, 10.181667]} zoom={13} style={{ height: '500px', width: '100%' }}>
-            <TileLayer
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            />
-            {maintenances.map(maintenance => (
-              maintenance.equipmentId?.location && (
-                <Marker
-                  key={maintenance._id}
-                  position={[maintenance.equipmentId.location.lat, maintenance.equipmentId.location.lng]}
-                  eventHandlers={{
-                    click: () => setShowDetailsModal(maintenance),
-                  }}
-                >
-                  <Popup>
-                    {maintenance.equipmentId.name}: {maintenance.description}
-                  </Popup>
-                </Marker>
-              )
-            ))}
-          </MapContainer>
-        </div>
-
         {/* Success Message */}
         {successMessage && (
           <div className="mb-4 p-3 bg-green-50 border-l-4 border-green-400 rounded">
@@ -451,66 +383,22 @@ const MapSite = () => {
             <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full transform transition-all animate-scale-in">
               <div className="flex items-center mb-4">
                 <FiPlus className="h-6 w-6 text-indigo-600 mr-2" />
-                <h3 className="text-lg font-semibold text-gray-900">Schedule Maintenance</h3>
+                <h3 className="text-lg font-semibold text-gray-900">Schedule Site Maintenance</h3>
               </div>
+
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Equipment ID</label>
+                  <label className="block text-sm font-medium text-gray-700">Site ID</label>
                   <input
                     type="text"
                     name="equipmentId"
                     value={formData.equipmentId}
                     onChange={handleInputChange}
                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                    placeholder="Enter equipment ID"
+                    placeholder="Enter site ID"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Equipment Name</label>
-                  <input
-                    type="text"
-                    name="equipmentName"
-                    value={formData.equipmentName}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                    placeholder="Enter equipment name"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Serial Number (Optional)</label>
-                  <input
-                    type="text"
-                    name="serialNumber"
-                    value={formData.serialNumber}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                    placeholder="Enter serial number"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Latitude</label>
-                    <input
-                      type="number"
-                      name="lat"
-                      value={formData.lat}
-                      onChange={handleInputChange}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                      placeholder="e.g., 36.806389"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Longitude</label>
-                    <input
-                      type="number"
-                      name="lng"
-                      value={formData.lng}
-                      onChange={handleInputChange}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                      placeholder="e.g., 10.181667"
-                    />
-                  </div>
-                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Description</label>
                   <textarea
@@ -522,6 +410,7 @@ const MapSite = () => {
                     rows="3"
                   />
                 </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Technician</label>
                   <select
@@ -538,6 +427,7 @@ const MapSite = () => {
                     ))}
                   </select>
                 </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Date</label>
@@ -549,8 +439,9 @@ const MapSite = () => {
                       className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                     />
                   </div>
+
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Time (Optional)</label>
+                    <label className="block text-sm font-medium text-gray-700">Time</label>
                     <input
                       type="time"
                       name="scheduledTime"
@@ -561,6 +452,7 @@ const MapSite = () => {
                     />
                   </div>
                 </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Status</label>
                   <select
@@ -575,6 +467,7 @@ const MapSite = () => {
                   </select>
                 </div>
               </div>
+
               <div className="mt-6 flex justify-end space-x-3">
                 <button
                   onClick={() => setShowAddModal(false)}
@@ -599,66 +492,20 @@ const MapSite = () => {
             <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full transform transition-all animate-scale-in">
               <div className="flex items-center mb-4">
                 <FiEdit className="h-6 w-6 text-indigo-600 mr-2" />
-                <h3 className="text-lg font-semibold text-gray-900">Edit Maintenance</h3>
+                <h3 className="text-lg font-semibold text-gray-900">Edit Site Maintenance</h3>
               </div>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Equipment ID</label>
+                  <label className="block text-sm font-medium text-gray-700">Site ID</label>
                   <input
                     type="text"
                     name="equipmentId"
                     value={formData.equipmentId}
                     onChange={handleInputChange}
                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                    placeholder="Enter equipment ID"
+                    placeholder="Enter site ID"
                     readOnly
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Equipment Name</label>
-                  <input
-                    type="text"
-                    name="equipmentName"
-                    value={formData.equipmentName}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                    placeholder="Enter equipment name"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Serial Number</label>
-                  <input
-                    type="text"
-                    name="serialNumber"
-                    value={formData.serialNumber}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                    placeholder="Enter serial number"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Latitude</label>
-                    <input
-                      type="number"
-                      name="lat"
-                      value={formData.lat}
-                      onChange={handleInputChange}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                      placeholder="e.g., 36.806389"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Longitude</label>
-                    <input
-                      type="number"
-                      name="lng"
-                      value={formData.lng}
-                      onChange={handleInputChange}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                      placeholder="e.g., 10.181667"
-                    />
-                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Description</label>
@@ -748,19 +595,13 @@ const MapSite = () => {
             <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full transform transition-all animate-scale-in">
               <div className="flex items-center mb-4">
                 <FiEye className="h-6 w-6 text-blue-600 mr-2" />
-                <h3 className="text-lg font-semibold text-gray-900">Maintenance Details</h3>
+                <h3 className="text-lg font-semibold text-gray-900">Site Maintenance Details</h3>
               </div>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Equipment</label>
+                  <label className="block text-sm font-medium text-gray-700">Site</label>
                   <p className="mt-1 text-sm text-gray-600">
                     {showDetailsModal.equipmentId?.name || 'Unknown'} ({showDetailsModal.equipmentId?.serialNumber || 'N/A'})
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Location</label>
-                  <p className="mt-1 text-sm text-gray-600">
-                    Lat: {showDetailsModal.equipmentId?.location?.lat || 'N/A'}, Lng: {showDetailsModal.equipmentId?.location?.lng || 'N/A'}
                   </p>
                 </div>
                 <div>
@@ -780,7 +621,7 @@ const MapSite = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Scheduled Date</label>
                   <p className="mt-1 text-sm text-gray-600">
-                    {moment(showDetailsModal.scheduledDate).tz('Africa/Tunis').format('YYYY-MM-DD')}
+                    {moment(showDetailsModal.scheduledDate).tz('Europe/Paris').format('YYYY-MM-DD')}
                   </p>
                 </div>
                 {showDetailsModal.scheduledTime && (
@@ -791,10 +632,24 @@ const MapSite = () => {
                     </p>
                   </div>
                 )}
+                {showDetailsModal.performedAt && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Performed At</label>
+                    <p className="mt-1 text-sm text-gray-600">
+                      {moment(showDetailsModal.performedAt).tz('Europe/Paris').format('MMM D, YYYY h:mm A')}
+                    </p>
+                  </div>
+                )}
+                {showDetailsModal.resolutionNotes && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Resolution Notes</label>
+                    <p className="mt-1 text-sm text-gray-600">{showDetailsModal.resolutionNotes}</p>
+                  </div>
+                )}
               </div>
               <div className="mt-6 flex justify-end">
                 <button
-                  onClick={() => setShowDetailsModal(null)}
+                  onClick={closeDetailsModal}
                   className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 text-sm"
                 >
                   Close
@@ -810,7 +665,7 @@ const MapSite = () => {
             <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full transform transition-all animate-scale-in">
               <div className="flex items-center mb-4">
                 <FiTrash2 className="h-6 w-6 text-red-600 mr-2" />
-                <h3 className="text-lg font-semibold text-gray-900">Delete Maintenance</h3>
+                <h3 className="text-lg font-semibold text-gray-900">Delete Site Maintenance</h3>
               </div>
               <p className="text-sm text-gray-600 mb-6">
                 Are you sure you want to delete this maintenance record? This action cannot be undone.
@@ -837,4 +692,4 @@ const MapSite = () => {
   );
 };
 
-export default MapSite;
+export default DashMapSites;
