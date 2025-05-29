@@ -44,20 +44,23 @@ const NetworkAlerts = () => {
   axios.defaults.baseURL = 'http://localhost:3000';
 
   // Fetch site references for dropdown
-  useEffect(() => {
-    const fetchSiteReferences = async () => {
-      try {
-        const response = await axios.get('/api/sites/references');
-        setSiteReferences(response.data);
-      } catch (error) {
-        console.error('Failed to fetch site references:', error);
-        setError('Failed to fetch site references. Using fallback options.');
-        // Fallback to known site references
-        setSiteReferences(['SITE001', 'SITE002']);
-      }
-    };
-    fetchSiteReferences();
-  }, []);
+useEffect(() => {
+  const fetchSiteReferences = async () => {
+    try {
+      const response = await axios.get('/api/sites/references');
+      // Normalize to array of strings for consistency
+      const references = Array.isArray(response.data)
+        ? response.data.map((site) => site.site_reference).filter(Boolean)
+        : [];
+      setSiteReferences(references);
+    } catch (error) {
+      console.error('Failed to fetch site references:', error.response?.data || error.message);
+      setError('Failed to fetch site references. Using fallback options.');
+      setSiteReferences(['SITE001', 'SITE002']);
+    }
+  };
+  fetchSiteReferences();
+}, []);
 
   const fetchAlerts = async () => {
     setLoading(true);

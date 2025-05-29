@@ -190,8 +190,8 @@ exports.deleteSite = async (req, res) => {
 
     // Validate ID
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ message: 'Invalid site ID format' });
-    }
+  return res.status(400).json({ message: 'Invalid site ID format' });
+}
 
     // Check if site has associated alerts
     const alerts = await Alert.find({ siteId: id });
@@ -258,7 +258,7 @@ exports.assignTechnicianToSites = async (req, res) => {
 exports.getSiteReferences = async (req, res) => {
   try {
     const sites = await Site.find({}, '_id site_reference').lean();
-    res.status(200).json(sites); // Returns [{ _id, site_reference }, ...]
+    res.status(200).json(sites);
   } catch (error) {
     console.error('Error fetching site references:', error);
     res.status(500).json({ message: 'Error fetching site references', error: error.message });
