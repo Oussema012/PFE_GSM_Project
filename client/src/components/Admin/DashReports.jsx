@@ -1,269 +1,282 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { Bar, Line, Pie } from 'react-chartjs-2';
+import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement, Title, Tooltip, Legend, Filler } from 'chart.js';
+
+// Register Chart.js components, including Filler
+ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement, Title, Tooltip, Legend, Filler);
 
 // Configure the backend API base URL
 const API_BASE_URL = 'http://localhost:3000'; // Update to match your backend server URL
 
 const DashReport = () => {
-  const [reports, setReports] = useState([]);
-  const [siteId, setSiteId] = useState('');
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
-  const [reportType, setReportType] = useState('summary');
-  const [selectedReport, setSelectedReport] = useState(null);
+  const [sites, setSites] = useState([]);
+  const [reports, setReports] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const fetchReports = async () => {
-    if (!siteId) {
-      setError('Site ID is required.');
-      return;
-    }
-    setLoading(true);
-    setError('');
-    try {
-      let url = `${API_BASE_URL}/api/reports/${siteId}`;
-      if (fromDate && toDate) {
-        url = `${API_BASE_URL}/api/reports/date-range/${siteId}?fromDate=${fromDate}&toDate=${toDate}`;
+  useEffect(() => {
+    const fetchSitesAndReports = async () => {
+      setLoading(true);
+      setError('');
+      try {
+        // Fetch all sites
+        const sitesResponse = await axios.get(`${API_BASE_URL}/api/sites`);
+        console.log('Sites response:', sitesResponse.data); // Debug log
+        if (sitesResponse.data.length === 0) {
+          setError('No sites found.');
+          setLoading(false);
+          return;
+        }
+        setSites(sitesResponse.data);
+
+        // Fetch data for each site
+        const reportPromises = sitesResponse.data.map(async (site) => {
+          const siteId = site._id; // Use _id from Site model
+          console.log(`Fetching data for site: ${site.name} (ID: ${siteId})`); // Debug log
+          try {
+            // Fetch active alerts
+            const activeAlertsResponse = await axios.get(`${API_BASE_URL}/api/alerts/active/${siteId}`);
+            const activeAlerts = activeAlertsResponse.data;
+            console.log(`Active alerts for ${site.name}:`, activeAlerts.length); // Debug log
+
+            // Fetch resolved alerts
+            const resolvedAlertsResponse = await axios.get(`${API_BASE_URL}/api/alerts/resolved/${siteId}`);
+            const resolvedAlerts = resolvedAlertsResponse.data;
+            console.log(`Resolved alerts for ${site.name}:`, resolvedAlerts.length); // Debug log
+
+            // Fetch interventions (try site-specific endpoint first)
+            let interventions = [];
+            try {
+              const interventionsResponse = await axios.get(`${API_BASE_URL}/api/interventions/site/${siteId}`);
+              interventions = interventionsResponse.data.data || [];
+              console.log(`Interventions for ${site.name} (site endpoint):`, interventions.length); // Debug log
+            } catch (siteIntErr) {
+              console.warn(`Site-specific interventions endpoint failed for ${site.name}:`, siteIntErr.message); // Debug log
+              // Fallback to fetching all interventions and filtering
+              const allInterventionsResponse = await axios.get(`${API_BASE_URL}/api/interventions/all`);
+              interventions = allInterventionsResponse.data.data.filter(int => int.siteId === siteId || int.siteId === site.site_reference) || [];
+              console.log(`Interventions for ${site.name} (all endpoint, filtered):`, interventions.length); // Debug log
+            }
+
+            // Fetch equipment for the site
+            const equipmentResponse = await axios.get(`${API_BASE_URL}/api/equipment/${siteId}`);
+            const equipment = equipmentResponse.data;
+            console.log(`Equipment for ${site.name}:`, equipment.length); // Debug log
+
+            // Fetch maintenance records for all equipment at the site
+            const maintenancePromises = equipment.map(eq =>
+              axios.get(`${API_BASE_URL}/api/maintenance/equipment/${eq._id}`)
+            );
+            const maintenanceResponses = await Promise.all(maintenancePromises);
+            const maintenanceRecords = maintenanceResponses.flatMap(res => res.data.data || []);
+            console.log(`Maintenance records for ${site.name}:`, maintenanceRecords.length); // Debug log
+
+            // Process alert statistics
+            const alertStats = {
+              total: activeAlerts.length + resolvedAlerts.length,
+              active: activeAlerts.length,
+              resolved: resolvedAlerts.length
+            };
+
+            // Process intervention statistics
+            const totalInterventions = interventions.length;
+            const completedInterventions = interventions.filter(int => int.status === 'completed' && int.resolvedAt && int.createdAt);
+            const averageDuration = completedInterventions.length > 0
+              ? completedInterventions.reduce((sum, int) => {
+                  const duration = (new Date(int.resolvedAt) - new Date(int.createdAt)) / (1000 * 60); // Duration in minutes
+                  return sum + duration;
+                }, 0) / completedInterventions.length
+              : 0;
+
+            const interventionStats = {
+              total: totalInterventions,
+              averageDuration: Number(averageDuration.toFixed(2))
+            };
+
+            // Process maintenance statistics
+            const maintenanceByType = maintenanceRecords.reduce((acc, record) => {
+              const type = record.description.split(' ')[0] || 'Other'; // Derive type from description
+              acc[type] = (acc[type] || 0) + 1;
+              return acc;
+            }, {});
+
+            const maintenanceStats = {
+              total: maintenanceRecords.length,
+              completed: maintenanceRecords.filter(record => record.status === 'completed').length,
+              scheduled: maintenanceRecords.filter(record => record.status === 'pending').length,
+              byType: maintenanceByType
+            };
+
+            return {
+              siteId,
+              report: {
+                generatedAt: new Date().toISOString(), // Current time
+                data: {
+                  alertStats,
+                  interventionStats,
+                  maintenanceStats
+                }
+              }
+            };
+          } catch (err) {
+            console.error(`Error fetching data for site ${site.name} (ID: ${siteId}):`, err);
+            return { siteId, report: null };
+          }
+        });
+
+        const reportsData = {};
+        const results = await Promise.all(reportPromises);
+        results.forEach(({ siteId, report }) => {
+          reportsData[siteId] = report;
+        });
+
+        if (Object.values(reportsData).every(report => report === null)) {
+          setError('No reports found for any site.');
+        }
+
+        setReports(reportsData);
+      } catch (err) {
+        setError('Failed to fetch data: ' + (err.response?.data?.message || err.message));
+      } finally {
+        setLoading(false);
       }
-      const response = await axios.get(url);
-      setReports(response.data);
-    } catch (err) {
-      setError('Failed to fetch reports: ' + (err.response?.data?.error || err.message));
-    } finally {
-      setLoading(false);
+    };
+
+    fetchSitesAndReports();
+  }, []);
+
+  const getChartData = (siteId, type) => {
+    const report = reports[siteId];
+    if (!report) return null;
+
+    switch (type) {
+      case 'alert':
+        return {
+          labels: ['Total', 'Active', 'Resolved'],
+          datasets: [{
+            label: `Alert Statistics (${siteId})`,
+            data: [
+              report.data.alertStats.total || 0,
+              report.data.alertStats.active || 0,
+              report.data.alertStats.resolved || 0
+            ],
+            backgroundColor: ['#3b82f6', '#10b981', '#ef4444'],
+            borderColor: ['#2563eb', '#059669', '#dc2626'],
+            borderWidth: 1
+          }]
+        };
+      case 'intervention':
+        return {
+          labels: ['Total Interventions', 'Average Duration (min)'],
+          datasets: [{
+            label: `Intervention Statistics (${siteId})`,
+            data: [
+              report.data.interventionStats.total || 0,
+              report.data.interventionStats.averageDuration || 0
+            ],
+            borderColor: '#8b5cf6',
+            backgroundColor: 'rgba(139, 92, 246, 0.2)',
+            fill: true,
+            tension: 0.4
+          }]
+        };
+      case 'maintenance':
+        return {
+          labels: Object.keys(report.data.maintenanceStats.byType || {}),
+          datasets: [{
+            label: `Maintenance Types (${siteId})`,
+            data: Object.values(report.data.maintenanceStats.byType || {}),
+            backgroundColor: ['#f97316', '#facc15', '#22d3ee', '#a3e635'],
+            borderColor: '#ffffff',
+            borderWidth: 1
+          }]
+        };
+      default:
+        return null;
     }
   };
 
-  const generateReport = async () => {
-    // Validate inputs
-    if (!siteId || !fromDate || !toDate) {
-      setError('Please fill in all required fields.');
-      return;
-    }
-  
-    // Set loading state and clear any previous errors
-    setLoading(true);
-    setError('');
-  
-    try {
-      // Send the request to the API
-      const response = await axios.post(`${API_BASE_URL}/api/reports/generate`, {
-        siteId,
-        fromDate,
-        toDate,
-        reportType,
-        generatedBy: 'user',
-      });
-  
-      // Check if the response is successful
-      if (response.status === 200) {
-        fetchReports();  // Fetch the updated reports list after generating the report
-        alert('Report generated successfully!');
-      } else {
-        throw new Error('Failed to generate report: Unexpected response status.');
-      }
-  
-    } catch (err) {
-      // Handle errors (both API-specific and generic)
-      const errorMessage = err.response?.data?.error || err.message || 'An unknown error occurred.';
-      setError(`Failed to generate report: ${errorMessage}`);
-    } finally {
-      // Always stop loading state after request completes
-      setLoading(false);
-    }
-  };
-  
-
-  const deleteReport = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this report?')) return;
-    setLoading(true);
-    setError('');
-    try {
-      await axios.delete(`${API_BASE_URL}/api/reports/${id}`);
-      fetchReports();
-      if (selectedReport?._id === id) setSelectedReport(null);
-      alert('Report deleted successfully!');
-    } catch (err) {
-      setError('Failed to delete report: ' + (err.response?.data?.error || err.message));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const viewReport = async (id) => {
-    setLoading(true);
-    setError('');
-    try {
-      const response = await axios.get(`${API_BASE_URL}/api/reports/report/${id}`);
-      setSelectedReport(response.data);
-    } catch (err) {
-      setError('Failed to fetch report details: ' + (err.response?.data?.error || err.message));
-    } finally {
-      setLoading(false);
+  const chartOptions = {
+    plugins: {
+      title: { display: true, font: { size: 16 } },
+      legend: { position: 'right' }
+    },
+    scales: {
+      y: { beginAtZero: true },
+      x: { display: true }
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-100 to-gray-200 p-6 font-sans">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-4xl font-extrabold text-gray-800 mb-8 text-center">Report Dashboard</h1>
+    <div className="bg-white p-6 rounded-xl shadow-lg">
+      <h1 className="text-3xl font-bold text-gray-800 mb-6">Report Dashboard</h1>
 
-        {/* Filters and Generate Report */}
-        <div className="bg-white p-6 rounded-xl shadow-lg mb-8">
-          <h2 className="text-2xl font-semibold text-gray-700 mb-6">Generate New Report</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <input
-              type="text"
-              placeholder="Site ID"
-              value={siteId}
-              onChange={(e) => setSiteId(e.target.value)}
-              className="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
-            />
-            <input
-              type="date"
-              value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
-              className="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
-            />
-            <input
-              type="date"
-              value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
-              className="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
-            />
-            <select
-              value={reportType}
-              onChange={(e) => setReportType(e.target.value)}
-              className="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
-            >
-              <option value="summary">Summary</option>
-              <option value="daily">Daily</option>
-              <option value="weekly">Weekly</option>
-              <option value="monthly">Monthly</option>
-            </select>
-          </div>
-          <div className="mt-6 flex flex-col sm:flex-row sm:space-x-4 space-y-4 sm:space-y-0">
-            <button
-              onClick={generateReport}
-              disabled={loading}
-              className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-indigo-300 transition flex items-center justify-center"
-            >
-              {loading ? (
-                <svg className="animate-spin h-5 w-5 mr-2 text-white" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8h8a8 8 0 01-16 0z" />
-                </svg>
-              ) : null}
-              {loading ? 'Generating...' : 'Generate Report'}
-            </button>
-            <button
-              onClick={fetchReports}
-              disabled={loading || !siteId}
-              className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:bg-gray-300 transition"
-            >
-              {loading ? 'Loading...' : 'Fetch Reports'}
-            </button>
-          </div>
-          {error && <p className="mt-4 text-red-600 font-medium">{error}</p>}
+      {loading && (
+        <div className="flex justify-center items-center">
+          <svg className="animate-spin h-8 w-8 text-teal-600" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8h8a8 8 0 01-16 0z" />
+          </svg>
         </div>
+      )}
+      {error && <p className="text-red-600 font-medium text-center">{error}</p>}
 
-        {/* Report List */}
-        <div className="bg-white p-6 rounded-xl shadow-lg">
-          <h2 className="text-2xl font-semibold text-gray-700 mb-6">Reports</h2>
-          {loading && (
-            <div className="flex justify-center items-center">
-              <svg className="animate-spin h-8 w-8 text-indigo-600" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8h8a8 8 0 01-16 0z" />
-              </svg>
-            </div>
-          )}
-          {!loading && reports.length === 0 && <p className="text-gray-600 text-center">No reports found.</p>}
-          {!loading && reports.length > 0 && (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-separate border-spacing-y-2">
-                <thead>
-                  <tr className="bg-indigo-100 text-indigo-800">
-                    <th className="p-4 rounded-l-lg">Report ID</th>
-                    <th className="p-4">Type</th>
-                    <th className="p-4">Date Range</th>
-                    <th className="p-4">Generated By</th>
-                    <th className="p-4 rounded-r-lg">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {reports.map((report) => (
-                    <tr key={report._id} className="bg-gray-50 hover:bg-indigo-50 transition rounded-lg">
-                      <td className="p-4 rounded-l-lg">{report._id}</td>
-                      <td className="p-4 capitalize">{report.reportType}</td>
-                      <td className="p-4">
-                        {new Date(report.fromDate).toLocaleDateString()} -{' '}
-                        {new Date(report.toDate).toLocaleDateString()}
-                      </td>
-                      <td className="p-4">{report.generatedBy}</td>
-                      <td className="p-4 rounded-r-lg">
-                        <button
-                          onClick={() => viewReport(report._id)}
-                          className="text-indigo-600 hover:text-indigo-800 font-medium mr-4"
-                        >
-                          View
-                        </button>
-                        <button
-                          onClick={() => deleteReport(report._id)}
-                          className="text-red-600 hover:text-red-800 font-medium"
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+      {!loading && !error && sites.length > 0 && (
+        <div className="space-y-12">
+          {sites.map(site => {
+            const siteId = site._id;
+            const report = reports[siteId];
+            return (
+              <div key={siteId}>
+                <h2 className="text-2xl font-semibold text-gray-800 mb-4">{site.name} Statistics</h2>
+                {report ? (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="bg-gray-50 p-4 rounded-lg shadow">
+                      <h3 className="text-lg font-semibold text-gray-700 mb-4">Alert Statistics</h3>
+                      <p className="text-gray-600 mb-2">Total Alerts: {report.data.alertStats.total}</p>
+                      <p className="text-gray-600 mb-2">Active Alerts: {report.data.alertStats.active}</p>
+                      <p className="text-gray-600 mb-4">Resolved Alerts: {report.data.alertStats.resolved}</p>
+                      <Bar
+                        data={getChartData(siteId, 'alert')}
+                        options={{ ...chartOptions, plugins: { ...chartOptions.plugins, title: { ...chartOptions.plugins.title, text: `Alert Statistics (${site.name})` } } }}
+                      />
+                    </div>
 
-        {/* Report Details Modal */}
-        {selectedReport && (
-          <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-xl p-8 max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
-              <h2 className="text-3xl font-bold text-gray-800 mb-6">Report Details</h2>
-              <div className="space-y-4 text-gray-700">
-                <p><strong className="font-semibold">ID:</strong> {selectedReport._id}</p>
-                <p><strong className="font-semibold">Site ID:</strong> {selectedReport.siteId}</p>
-                <p><strong className="font-semibold">Type:</strong> {selectedReport.reportType}</p>
-                <p>
-                  <strong className="font-semibold">Date Range:</strong>{' '}
-                  {new Date(selectedReport.fromDate).toLocaleDateString()} -{' '}
-                  {new Date(selectedReport.toDate).toLocaleDateString()}
-                </p>
-                <p><strong className="font-semibold">Generated By:</strong> {selectedReport.generatedBy}</p>
-                <p>
-                  <strong className="font-semibold">Generated At:</strong>{' '}
-                  {new Date(selectedReport.generatedAt).toLocaleString()}
-                </p>
-                <h3 className="text-xl font-semibold mt-6 text-indigo-700">Alert Statistics</h3>
-                <p><strong className="font-semibold">Total Alerts:</strong> {selectedReport.data.alertStats.total}</p>
-                <p><strong className="font-semibold">Active Alerts:</strong> {selectedReport.data.alertStats.active}</p>
-                <p><strong className="font-semibold">Resolved Alerts:</strong> {selectedReport.data.alertStats.resolved}</p>
-                <h3 className="text-xl font-semibold mt-6 text-indigo-700">Intervention Statistics</h3>
-                <p><strong className="font-semibold">Total Interventions:</strong> {selectedReport.data.interventionStats.total}</p>
-                <p>
-                  <strong className="font-semibold">Average Duration:</strong>{' '}
-                  {selectedReport.data.interventionStats.averageDuration || 'N/A'}
-                </p>
+                    <div className="bg-gray-50 p-4 rounded-lg shadow">
+                      <h3 className="text-lg font-semibold text-gray-700 mb-3">Intervention Statistics</h3>
+                      <p className="text-gray-600 mb-2">Total Interventions: {report.data.interventionStats.total}</p>
+                      <p className="text-gray-600 mb-4">
+                        Average Duration:{' '}
+                        {report.data.interventionStats.averageDuration > 0
+                          ? `${report.data.interventionStats.averageDuration.toFixed(2)} minutes`
+                          : 'N/A (No completed interventions)'}
+                      </p>
+                      <Line
+                        data={getChartData(siteId, 'intervention')}
+                        options={{ ...chartOptions, plugins: { ...chartOptions.plugins, title: { ...chartOptions.plugins.title, text: `Intervention Statistics (${site.name})` } } }}
+                      />
+                    </div>
+
+                    <div className="bg-gray-50 p-4 rounded-lg shadow">
+                      <h3 className="text-lg font-semibold text-gray-700 mb-3">Maintenance Statistics</h3>
+                      <p className="text-gray-600 mb-2">Total Maintenance: {report.data.maintenanceStats.total}</p>
+                      <p className="text-gray-600 mb-2">Completed: {report.data.maintenanceStats.completed}</p>
+                      <p className="text-gray-600 mb-4">Scheduled: {report.data.maintenanceStats.scheduled}</p>
+                      <Pie
+                        data={getChartData(siteId, 'maintenance')}
+                        options={{ ...chartOptions, plugins: { ...chartOptions.plugins, title: { ...chartOptions.plugins.title, text: `Maintenance Statistics by Type (${site.name})` } } }}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-gray-600">No report available for {site.name}.</p>
+                )}
               </div>
-              <button
-                onClick={() => setSelectedReport(null)}
-                className="mt-6 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };

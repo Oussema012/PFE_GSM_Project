@@ -11,8 +11,7 @@ import {
   FaUserCircle,
   FaSearch,
   FaUserShield,
-  FaTimes,
-  FaGlobe 
+  FaGlobe
 } from "react-icons/fa";
 import axios from 'axios';
 import { signoutSuccess } from '../redux/user/userSlice';
@@ -49,7 +48,7 @@ const AdminDashboard = () => {
     try {
       await axios.post('http://localhost:3000/signout');
       dispatch(signoutSuccess());
-      navigate("/");
+      navigate('/signin');
     } catch (error) {
       console.error('Error signing out:', error);
     }
@@ -78,8 +77,8 @@ const AdminDashboard = () => {
 
   return (
     <div className="flex min-h-screen bg-blue-50">
-      {/* Sidebar */}
-      <div className="w-64 bg-blue-800 text-white flex flex-col p-0 shadow-xl">
+      {/* Fixed Sidebar */}
+      <div className="fixed top-0 left-0 w-64 h-screen bg-blue-800 text-white flex flex-col p-0 shadow-xl z-50">
         <div className="p-6 pb-4 border-b border-blue-700">
           <div className="flex items-center space-x-3">
             <FaUserShield className="text-2xl text-blue-300" />
@@ -172,8 +171,8 @@ const AdminDashboard = () => {
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Main Content with Margin to Account for Fixed Sidebar */}
+      <div className="flex-1 flex flex-col overflow-hidden ml-64">
         <header className="bg-white shadow-sm">
           <div className="flex items-center justify-between px-6 py-4">
             {/* Search Bar */}

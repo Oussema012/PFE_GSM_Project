@@ -3,15 +3,10 @@ import axios from 'axios';
 import {
   Container,
   TextField,
-  Button,
   Typography,
   Paper,
   Snackbar,
   Alert,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Table,
   TableHead,
   TableBody,
@@ -20,244 +15,286 @@ import {
   IconButton,
   Box,
   InputAdornment,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Chip,
+  CircularProgress,
 } from '@mui/material';
-import { Delete, Search, LockReset } from '@mui/icons-material';
+import {
+  Search as SearchIcon,
+  People as PeopleIcon,
+  AccessTime as AccessTimeIcon,
+  Power as PowerIcon,
+  PowerOff as PowerOffIcon,
+} from '@mui/icons-material';
 
 const DashUserManagement = () => {
   const [users, setUsers] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
-  const [openSnackbar, setOpenSnackbar] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
-  const [snackbarSeverity, setSnackbarSeverity] = useState('success');
-  const [openResetDialog, setOpenResetDialog] = useState(false);
-  const [resetPassword, setResetPassword] = useState('');
-  const [resetUserId, setResetUserId] = useState(null);
-  const [isProcessing, setIsProcessing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [error, setError] = useState('');
+  const [selectedRole, setSelectedRole] = useState('all');
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [loading, setLoading] = useState(false);
 
-  const API_URL = 'http://localhost:3000/api/users';
+  const API_URL = 'http://localhost:3000/api';
 
   useEffect(() => {
     fetchUsers();
-  }, []);
+  }, [selectedRole]);
 
   useEffect(() => {
     setFilteredUsers(
       users.filter(
         (user) =>
-          user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          user.department.toLowerCase().includes(searchTerm.toLowerCase())
+          (user.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (user.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (user.department || '').toLowerCase().includes(searchTerm.toLowerCase())
       )
     );
   }, [searchTerm, users]);
 
   const fetchUsers = async () => {
+    setLoading(true);
     try {
-      const res = await axios.get(`${API_URL}`);
-      setUsers(res.data.data || res.data);
+      const endpoint = selectedRole === 'all' ? `${API_URL}/users` : `${API_URL}/technicians`;
+      const res = await axios.get(endpoint);
+      const usersData = res.data.data || res.data;
+      setUsers(usersData);
     } catch (err) {
-      console.error('Error fetching users:', err);
       showSnackbar('Failed to fetch users', 'error');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const validateResetPassword = () => {
-    if (!resetPassword) return 'New password is required';
-    if (resetPassword.length < 6) return 'Password must be at least 6 characters';
-    return '';
-  };
-
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this user?')) return;
-
+  const activateTechnician = async (id) => {
+    setLoading(true);
     try {
-      await axios.delete(`${API_URL}/${id}`);
-      showSnackbar('User deleted successfully');
+      const res = await axios.put(`${API_URL}/technicians/${id}/activate`, {});
+      showSnackbar(res.data.message || 'Technician activated successfully', 'success');
       fetchUsers();
     } catch (err) {
-      console.error('Error deleting user:', err);
-      showSnackbar(err.response?.data?.message || 'Error deleting user', 'error');
-    }
-  };
-
-  const handleResetPassword = async () => {
-    const validationError = validateResetPassword();
-    if (validationError) {
-      setError(validationError);
-      showSnackbar(validationError, 'error');
-      return;
-    }
-
-    setIsProcessing(true);
-    try {
-      await axios.put(`${API_URL}/${resetUserId}/reset-password`, {
-        newPassword: resetPassword,
-      });
-      showSnackbar('Password reset successfully');
-      setOpenResetDialog(false);
-      setResetPassword('');
-      setResetUserId(null);
-    } catch (err) {
-      console.error('Error resetting password:', err);
-      showSnackbar(err.response?.data?.message || 'Error resetting password', 'error');
+      const errorMessage = err.response?.data?.message || 'Failed to activate technician';
+      const errorDetails = err.response?.data?.error ? `: ${err.response.data.error}` : '';
+      showSnackbar(`${errorMessage}${errorDetails}`, 'error');
     } finally {
-      setIsProcessing(false);
+      setLoading(false);
     }
   };
 
-  const openResetPasswordDialog = (id) => {
-    setResetUserId(id);
-    setResetPassword('');
-    setOpenResetDialog(true);
+  const deactivateTechnician = async (id) => {
+    if (!window.confirm('Are you sure you want to deactivate this technician? This will remove all site assignments.')) return;
+    setLoading(true);
+    try {
+      const res = await axios.put(`${API_URL}/technicians/${id}/deactivate`, {});
+      showSnackbar(res.data.message || 'Technician deactivated successfully', 'success');
+      fetchUsers();
+    } catch (err) {
+      const errorMessage = err.response?.data?.message || 'Failed to deactivate technician';
+      const errorDetails = err.response?.data?.error ? `: ${err.response.data.error}` : '';
+      showSnackbar(`${errorMessage}${errorDetails}`, 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const showSnackbar = (message, severity = 'success') => {
-    setSnackbarMessage(message);
-    setSnackbarSeverity(severity);
-    setOpenSnackbar(true);
-  };
-
-  const handleCloseResetDialog = () => {
-    setOpenResetDialog(false);
-    setResetPassword('');
-    setResetUserId(null);
-    setError('');
+    setSnackbar({ open: true, message, severity });
   };
 
   const handleCloseSnackbar = () => {
-    setOpenSnackbar(false);
+    setSnackbar({ ...snackbar, open: false });
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    try {
+      return new Date(dateString).toLocaleString('en-US', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      });
+    } catch {
+      return 'N/A';
+    }
   };
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4">User Management</Typography>
-        <TextField
-          variant="outlined"
-          placeholder="Search by name, email, or department"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          size="small"
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <Search />
-              </InputAdornment>
-            ),
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: { xs: 'column', sm: 'row' },
+          justifyContent: 'space-between',
+          alignItems: { xs: 'flex-start', sm: 'center' },
+          mb: 4,
+          gap: 2,
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Box
+            sx={{
+              p: 2,
+              borderRadius: '8px',
+              bgcolor: 'primary.main',
+              color: 'primary.contrastText',
+            }}
+          >
+            <PeopleIcon fontSize="large" />
+          </Box>
+          <Box>
+            <Typography variant="h4" fontWeight="bold">
+              User Management
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Manage and monitor user activities
+            </Typography>
+          </Box>
+        </Box>
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
+            gap: 2,
+            width: { xs: '100%', sm: 'auto' },
           }}
-        />
+        >
+          <FormControl size="small" sx={{ minWidth: 120 }}>
+            <InputLabel>Role</InputLabel>
+            <Select
+              value={selectedRole}
+              onChange={(e) => setSelectedRole(e.target.value)}
+              label="Role"
+            >
+              <MenuItem value="all">All Roles</MenuItem>
+              <MenuItem value="technician">Technician</MenuItem>
+              <MenuItem value="admin">Admin</MenuItem>
+              <MenuItem value="engineer">Engineer</MenuItem>
+            </Select>
+          </FormControl>
+          <TextField
+            size="small"
+            placeholder="Search by name, email, or department"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon sx={{ color: 'text.secondary', mr: 1 }} />
+                </InputAdornment>
+              ),
+            }}
+            sx={{ width: { xs: '100%', sm: 240 } }}
+          />
+        </Box>
       </Box>
 
-      {/* Password Reset Dialog */}
-      <Dialog open={openResetDialog} onClose={handleCloseResetDialog} fullWidth maxWidth="sm">
-        <DialogTitle>Reset Password</DialogTitle>
-        <DialogContent>
-          <TextField
-            fullWidth
-            label="New Password"
-            type="password"
-            value={resetPassword}
-            onChange={(e) => setResetPassword(e.target.value)}
-            variant="outlined"
-            margin="normal"
-            error={error.includes('password')}
-            helperText={error.includes('password') ? error : ''}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseResetDialog}>Cancel</Button>
-          <Button
-            onClick={handleResetPassword}
-            variant="contained"
-            disabled={isProcessing}
-          >
-            {isProcessing ? 'Processing...' : 'Reset Password'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
       {/* Users Table */}
-      <Paper sx={{ p: 2, mt: 3 }}>
-        <Table>
-          <TableHead>
-            <TableRow sx={{ backgroundColor: 'primary.main' }}>
-              <TableCell sx={{ color: 'common.white', fontWeight: 'bold' }}>Name</TableCell>
-              <TableCell sx={{ color: 'common.white', fontWeight: 'bold' }}>Email</TableCell>
-              <TableCell sx={{ color: 'common.white', fontWeight: 'bold' }}>Role</TableCell>
-              <TableCell sx={{ color: 'common.white', fontWeight: 'bold' }}>Department</TableCell>
-              <TableCell sx={{ color: 'common.white', fontWeight: 'bold' }}>Status</TableCell>
-              <TableCell sx={{ color: 'common.white', fontWeight: 'bold' }} align="right">Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {filteredUsers.map((user) => (
-              <TableRow key={user._id} hover>
-                <TableCell>{user.name}</TableCell>
-                <TableCell>{user.email}</TableCell>
-                <TableCell>
-                  <Box
-                    component="span"
-                    sx={{
-                      p: 0.5,
-                      borderRadius: 1,
-                      bgcolor: user.role === 'engineer' ? 'info.light' : 'success.light',
-                      color: user.role === 'engineer' ? 'info.contrastText' : 'success.contrastText',
-                    }}
-                  >
-                    {user.role}
+      <Paper sx={{ p: 2, mt: 3, boxShadow: 3 }}>
+        {loading ? (
+          <Box sx={{ p: 4, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            <CircularProgress />
+          </Box>
+        ) : (
+          <Table>
+            <TableHead>
+              <TableRow sx={{ backgroundColor: 'primary.main' }}>
+                <TableCell sx={{ color: 'common.white', fontWeight: 'bold' }}>Name</TableCell>
+                <TableCell sx={{ color: 'common.white', fontWeight: 'bold' }}>Email</TableCell>
+                <TableCell sx={{ color: 'common.white', fontWeight: 'bold' }}>Role</TableCell>
+                <TableCell sx={{ color: 'common.white', fontWeight: 'bold' }}>Department</TableCell>
+                <TableCell sx={{ color: 'common.white', fontWeight: 'bold' }}>Status</TableCell>
+                <TableCell sx={{ color: 'common.white', fontWeight: 'bold' }}>Sites</TableCell>
+                <TableCell sx={{ color: 'common.white', fontWeight: 'bold' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <AccessTimeIcon fontSize="small" />
+                    Last Login
                   </Box>
                 </TableCell>
-                <TableCell>{user.department}</TableCell>
-                <TableCell>
-                  <Box
-                    component="span"
-                    sx={{
-                      p: 0.5,
-                      borderRadius: 1,
-                      bgcolor: user.isActive ? 'success.light' : 'error.light',
-                      color: user.isActive ? 'success.contrastText' : 'error.contrastText',
-                    }}
-                  >
-                    {user.isActive ? 'Active' : 'Inactive'}
-                  </Box>
-                </TableCell>
-                <TableCell align="right">
-                  <IconButton
-                    color="warning"
-                    onClick={() => openResetPasswordDialog(user._id)}
-                    aria-label="reset-password"
-                  >
-                    <LockReset />
-                  </IconButton>
-                  <IconButton
-                    color="error"
-                    onClick={() => handleDelete(user._id)}
-                    aria-label="delete"
-                  >
-                    <Delete />
-                  </IconButton>
-                </TableCell>
+                <TableCell sx={{ color: 'common.white', fontWeight: 'bold' }} align="right">Actions</TableCell>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHead>
+            <TableBody>
+              {filteredUsers.length > 0 ? (
+                filteredUsers.map((user) => (
+                  <TableRow key={user._id} hover>
+                    <TableCell>{user.name || 'N/A'}</TableCell>
+                    <TableCell>{user.email || 'N/A'}</TableCell>
+                    <TableCell>
+                      <Chip
+                        label={user.role || 'N/A'}
+                        color={
+                          user.role === 'technician'
+                            ? 'info'
+                            : user.role === 'engineer'
+                            ? 'warning'
+                            : 'success'
+                        }
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell>{user.department || 'N/A'}</TableCell>
+                    <TableCell>
+                      <Chip
+                        label={user.isActive ? 'Active' : 'Inactive'}
+                        color={user.isActive ? 'success' : 'error'}
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      {user.assignedSites?.length || 0} Site(s)
+                    </TableCell>
+                    <TableCell>{formatDate(user.lastLogin)}</TableCell>
+                    <TableCell align="right">
+                      {user.role === 'technician' && (
+                        <>
+                          <IconButton
+                            color="success"
+                            onClick={() => activateTechnician(user._id)}
+                            aria-label={`Activate technician ${user.name || 'unknown'}`}
+                            disabled={user.isActive}
+                          >
+                            <PowerIcon />
+                          </IconButton>
+                          <IconButton
+                            color="error"
+                            onClick={() => deactivateTechnician(user._id)}
+                            aria-label={`Deactivate technician ${user.name || 'unknown'}`}
+                            disabled={!user.isActive}
+                          >
+                            <PowerOffIcon />
+                          </IconButton>
+                        </>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
+                    <Typography color="text.secondary">No users found</Typography>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        )}
       </Paper>
 
       {/* Snackbar for notifications */}
       <Snackbar
-        open={openSnackbar}
+        open={snackbar.open}
         autoHideDuration={4000}
         onClose={handleCloseSnackbar}
         anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
       >
         <Alert
           onClose={handleCloseSnackbar}
-          severity={snackbarSeverity}
+          severity={snackbar.severity}
           sx={{ width: '100%' }}
         >
-          {snackbarMessage}
+          {snackbar.message}
         </Alert>
       </Snackbar>
     </Container>

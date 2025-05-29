@@ -29,6 +29,7 @@ const LiveTopologyViewer = () => {
   const [modalError, setModalError] = useState(null);
   const [resolveModal, setResolveModal] = useState(null);
   const [resolutionNotes, setResolutionNotes] = useState('');
+  const [successMessage, setSuccessMessage] = useState(null);
   const currentUser = useSelector((state) => state.user?.currentUser);
 
   useEffect(() => {
@@ -99,6 +100,43 @@ const LiveTopologyViewer = () => {
     setResolutionNotes('');
   };
 
+  const startTask = async (taskId) => {
+    if (!currentUser.isActive) {
+      setError('Cannot start tasks in observation mode');
+      return;
+    }
+
+    try {
+      setModalLoading(true);
+      setError(null);
+      setSuccessMessage(null);
+
+      const response = await axios.put(
+        `/api/maintenance/${taskId}`,
+        { status: 'in progress' },
+        { headers: { Authorization: `Bearer ${currentUser.token}` } }
+      );
+
+      if (response.data?.success) {
+        setTasks(tasks.map(task =>
+          task._id === taskId
+            ? { ...task, status: 'in progress' }
+            : task
+        ));
+        setSuccessMessage('Maintenance task started successfully!');
+        setTimeout(() => setSuccessMessage(null), 3000);
+      } else {
+        setError(response.data?.message || 'Failed to start task');
+      }
+    } catch (err) {
+      const errorMessage = err.response?.data?.message || 'Failed to start task';
+      setError(errorMessage);
+      console.error('Start task error:', err);
+    } finally {
+      setModalLoading(false);
+    }
+  };
+
   const resolveTask = async (taskId) => {
     if (!currentUser.isActive) {
       setError('Cannot resolve tasks in observation mode');
@@ -106,24 +144,39 @@ const LiveTopologyViewer = () => {
     }
 
     try {
+      if (resolutionNotes.length > 1000) {
+        setError('Resolution notes cannot exceed 1000 characters');
+        return;
+      }
+
+      setModalLoading(true);
+      setError(null);
+      setSuccessMessage(null);
+
       const response = await axios.put(
-        `/api/maintenance/resolve/${taskId}`, 
-        { resolutionNotes }, 
+        `/api/maintenance/resolve/${taskId}`,
+        { resolutionNotes },
         { headers: { Authorization: `Bearer ${currentUser.token}` } }
       );
+
       if (response.data?.success) {
-        setTasks(tasks.map(task => 
-          task._id === taskId 
-            ? { ...task, status: 'completed', performedAt: new Date(), resolutionNotes } 
+        setTasks(tasks.map(task =>
+          task._id === taskId
+            ? { ...task, status: 'completed', performedAt: new Date(), resolutionNotes }
             : task
         ));
+        setSuccessMessage('Maintenance task resolved successfully!');
         closeResolveModal();
+        setTimeout(() => setSuccessMessage(null), 3000);
       } else {
         setError(response.data?.message || 'Failed to resolve task');
       }
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to resolve task');
+      const errorMessage = err.response?.data?.message || 'Failed to resolve task';
+      setError(errorMessage);
       console.error('Resolve task error:', err);
+    } finally {
+      setModalLoading(false);
     }
   };
 
@@ -146,15 +199,15 @@ const LiveTopologyViewer = () => {
   const getStatusBadge = (status) => {
     const baseClass = 'badge gap-2 font-medium capitalize';
     switch (status?.toLowerCase()) {
-      case 'completed': 
+      case 'completed':
         return `${baseClass} badge-success text-success-content`;
-      case 'in progress': 
+      case 'in progress':
         return `${baseClass} badge-warning text-warning-content`;
-      case 'pending': 
+      case 'pending':
         return `${baseClass} badge-error text-error-content`;
       case 'overdue':
         return `${baseClass} bg-error/20 text-error border-error/30`;
-      default: 
+      default:
         return `${baseClass} badge-info text-info-content`;
     }
   };
@@ -164,6 +217,10 @@ const LiveTopologyViewer = () => {
     const scheduledDate = moment(task.scheduledDate).tz('Europe/Paris');
     const today = moment().tz('Europe/Paris');
     return scheduledDate.isBefore(today, 'day');
+  };
+
+  const canStartTask = (task) => {
+    return currentUser.isActive && task.status.toLowerCase() === 'pending' && !isTaskOverdue(task);
   };
 
   const canResolveTask = (task) => {
@@ -181,18 +238,6 @@ const LiveTopologyViewer = () => {
     );
   }
 
-  if (error) {
-    return (
-      <div className="alert alert-error shadow-lg max-w-2xl mx-auto animate-fade-in">
-        <FiAlertCircle size={24} />
-        <div>
-          <h3 className="font-bold text-white">Error loading tasks</h3>
-          <div className="text-xs text-white">{error}</div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="bg-white p-6 rounded-box shadow-sm max-w-7xl mx-auto animate-fade-in">
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-4">
@@ -204,13 +249,75 @@ const LiveTopologyViewer = () => {
             <span className="text-gray-800">My Maintenance Tasks</span>
           </h2>
           <p className="text-gray-600 mt-1">
-            {currentUser.isActive 
+            {currentUser.isActive
               ? 'Overview of your assigned maintenance activities'
               : 'You are in observation mode (deactivated). You can view tasks but cannot perform actions. Contact an admin to reactivate your account.'}
           </p>
         </div>
         <div className="badge badge-primary badge-lg px-4 py-3 text-lg">
           {tasks.length} {tasks.length === 1 ? 'Task' : 'Tasks'} Assigned
+        </div>
+      </div>
+
+      {/* Success and Error Messages */}
+      {successMessage && (
+        <div className="alert alert-success shadow-lg max-w-2xl mx-auto mb-4 animate-fade-in">
+          <FiCheckCircle size={24} />
+          <div>
+            <h3 className="font-bold text-white">Success</h3>
+            <div className="text-xs text-white">{successMessage}</div>
+          </div>
+        </div>
+      )}
+      {error && (
+        <div className="alert alert-error shadow-lg max-w-2xl mx-auto mb-4 animate-fade-in">
+          <FiAlertCircle size={24} />
+          <div>
+            <h3 className="font-bold text-white">Error</h3>
+            <div className="text-xs text-white">{error}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Summary Header */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="stat bg-white rounded-lg px-6 py-4 border-l-4 border-success">
+          <div className="stat-figure text-success">
+            <FiCheckCircle size={28} />
+          </div>
+          <div className="stat-title text-gray-600">Completed</div>
+          <div className="stat-value text-success">
+            {tasks.filter(t => t.status === 'completed').length}
+          </div>
+          <div className="stat-desc text-gray-600">
+            {tasks.length > 0 ? Math.round((tasks.filter(t => t.status === 'completed').length / tasks.length) * 100) : 0}% of total
+          </div>
+        </div>
+
+        <div className="stat bg-white rounded-lg px-6 py-4 border-l-4 border-warning">
+          <div className="stat-figure text-warning">
+            <FiClock size={28} />
+          </div>
+          <div className="stat-title text-gray-600">In Progress</div>
+          <div className="stat-value text-warning">
+            {tasks.filter(t => t.status === 'in progress').length}
+          </div>
+          <div className="stat-desc text-gray-600">
+            {tasks.filter(t => t.status === 'in progress' && isTaskOverdue(t)).length} overdue
+          </div>
+        </div>
+
+        <div className="stat bg-white rounded-lg px-6 py-4 border-l-4 border-error">
+          <div className="stat-figure text-error">
+            <FiAlertCircle size={28} />
+          </div>
+          <div className="stat-title text-gray-600">Pending</div>
+          <div className="stat-value text-error">
+            {tasks.filter(t => t.status === 'pending').length}
+          </div>
+          <div className="stat-desc text-gray-600">
+            {tasks.filter(t => t.status === 'pending' && isTaskOverdue(t)).length} overdue
+          </div>
         </div>
       </div>
 
@@ -232,13 +339,18 @@ const LiveTopologyViewer = () => {
                   <th className="text-base font-semibold text-gray-800">Description</th>
                   <th className="text-base font-semibold text-gray-800">Status</th>
                   <th className="text-base font-semibold text-gray-800">Scheduled</th>
-                  <th className="text-base font-semibold text-gray-800 pr-6">Actions</th>
+                  <th className="text-base font-semibold text-gray-800 pr-6">
+                    <div className="flex items-center gap-2">
+                      <FiCheck size={16} className="text-gray-600" />
+                      Actions
+                    </div>
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {tasks.map((task) => (
-                  <tr 
-                    key={task._id} 
+                  <tr
+                    key={task._id}
                     className={`hover:bg-gray-50 transition-colors ${isTaskOverdue(task) ? 'bg-red-50' : ''}`}
                   >
                     <td className="pl-6 py-4">
@@ -282,7 +394,7 @@ const LiveTopologyViewer = () => {
                     </td>
                     <td className="pr-6 py-4">
                       <div className="flex gap-2">
-                        <button 
+                        <button
                           className={`btn btn-sm btn-ghost text-primary transition-all group ${
                             !currentUser.isActive ? 'btn-disabled opacity-50 cursor-not-allowed' : 'hover:text-primary/80'
                           }`}
@@ -291,13 +403,26 @@ const LiveTopologyViewer = () => {
                           title={!currentUser.isActive ? 'Actions disabled in observation mode' : ''}
                         >
                           Details
-                          <FiChevronRight 
-                            size={18} 
-                            className={`ml-1 ${currentUser.isActive ? 'group-hover:translate-x-1 transition-transform' : ''}`} 
+                          <FiChevronRight
+                            size={18}
+                            className={`ml-1 ${currentUser.isActive ? 'group-hover:translate-x-1 transition-transform' : ''}`}
                           />
                         </button>
+                        {canStartTask(task) && (
+                          <button
+                            className={`btn btn-sm btn-warning text-white transition-all ${
+                              !currentUser.isActive ? 'btn-disabled opacity-50 cursor-not-allowed' : 'hover:bg-warning/80'
+                            }`}
+                            onClick={() => startTask(task._id)}
+                            disabled={!currentUser.isActive}
+                            title={!currentUser.isActive ? 'Actions disabled in observation mode' : ''}
+                          >
+                            <FiClock size={18} className="mr-1" />
+                            Start
+                          </button>
+                        )}
                         {canResolveTask(task) && (
-                          <button 
+                          <button
                             className={`btn btn-sm btn-success text-white transition-all ${
                               !currentUser.isActive ? 'btn-disabled opacity-50 cursor-not-allowed' : 'hover:bg-success/80'
                             }`}
@@ -414,89 +539,56 @@ const LiveTopologyViewer = () => {
           {resolveModal && currentUser.isActive && (
             <div className="modal modal-open">
               <div className="modal-box bg-white max-w-lg">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-2xl font-bold text-gray-800">Resolve Maintenance Task</h3>
-                  <button className="btn btn-sm btn-circle btn-ghost" onClick={closeResolveModal}>
-                    <FiX size={20} />
-                  </button>
-                </div>
-                <div className="space-y-4">
-                  <div>
-                    <label className="font-semibold text-gray-800">Technician:</label>
-                    <input 
-                      type="text" 
-                      value={currentUser?.name || 'Unknown'} 
-                      className="input input-bordered w-full mt-1 bg-gray-100" 
-                      readOnly 
-                    />
+                {modalLoading ? (
+                  <div className="flex justify-center items-center h-32">
+                    <span className="loading loading-spinner loading-lg text-primary"></span>
                   </div>
-                  <div>
-                    <label className="font-semibold text-gray-800">Resolution Notes:</label>
-                    <textarea
-                      className="textarea textarea-bordered w-full mt-1"
-                      value={resolutionNotes}
-                      onChange={(e) => setResolutionNotes(e.target.value)}
-                      placeholder="Enter resolution details (optional)"
-                    ></textarea>
-                  </div>
-                </div>
-                <div className="modal-action mt-6">
-                  <button className="btn btn-ghost" onClick={closeResolveModal}>
-                    Cancel
-                  </button>
-                  <button 
-                    className="btn btn-success text-white" 
-                    onClick={() => resolveTask(resolveModal._id)}
-                  >
-                    <FiCheck size={18} className="mr-1" />
-                    Resolve Task
-                  </button>
-                </div>
+                ) : (
+                  <>
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-2xl font-bold text-gray-800">Resolve Maintenance Task</h3>
+                      <button className="btn btn-sm btn-circle btn-ghost" onClick={closeResolveModal}>
+                        <FiX size={20} />
+                      </button>
+                    </div>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="font-semibold text-gray-800">Technician:</label>
+                        <input
+                          type="text"
+                          value={currentUser?.name || 'Unknown'}
+                          className="input input-bordered w-full mt-1 bg-gray-100"
+                          readOnly
+                        />
+                      </div>
+                      <div>
+                        <label className="font-semibold text-gray-800">Resolution Notes:</label>
+                        <textarea
+                          className="textarea textarea-bordered w-full mt-1"
+                          value={resolutionNotes}
+                          onChange={(e) => setResolutionNotes(e.target.value)}
+                          placeholder="Enter resolution details (optional)"
+                        ></textarea>
+                      </div>
+                    </div>
+                    <div className="modal-action mt-6">
+                      <button className="btn btn-ghost" onClick={closeResolveModal}>
+                        Cancel
+                      </button>
+                      <button
+                        className="btn btn-success text-white"
+                        onClick={() => resolveTask(resolveModal._id)}
+                        disabled={modalLoading}
+                      >
+                        <FiCheck size={18} className="mr-1" />
+                        Resolve Task
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}
-          
-          {/* Summary footer */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
-            <div className="stat bg-white rounded-lg px-6 py-4 border-l-4 border-success">
-              <div className="stat-figure text-success">
-                <FiCheckCircle size={28} />
-              </div>
-              <div className="stat-title text-gray-600">Completed</div>
-              <div className="stat-value text-success">
-                {tasks.filter(t => t.status === 'completed').length}
-              </div>
-              <div className="stat-desc text-gray-600">
-                {Math.round((tasks.filter(t => t.status === 'completed').length / tasks.length) * 100)}% of total
-              </div>
-            </div>
-            
-            <div className="stat bg-white rounded-lg px-6 py-4 border-l-4 border-warning">
-              <div className="stat-figure text-warning">
-                <FiClock size={28} />
-              </div>
-              <div className="stat-title text-gray-600">In Progress</div>
-              <div className="stat-value text-warning">
-                {tasks.filter(t => t.status === 'in progress').length}
-              </div>
-              <div className="stat-desc text-gray-600">
-                {tasks.filter(t => t.status === 'in progress' && isTaskOverdue(t)).length} overdue
-              </div>
-            </div>
-            
-            <div className="stat bg-white rounded-lg px-6 py-4 border-l-4 border-error">
-              <div className="stat-figure text-error">
-                <FiAlertCircle size={28} />
-              </div>
-              <div className="stat-title text-gray-600">Pending</div>
-              <div className="stat-value text-error">
-                {tasks.filter(t => t.status === 'pending').length}
-              </div>
-              <div className="stat-desc text-gray-600">
-                {tasks.filter(t => t.status === 'pending' && isTaskOverdue(t)).length} overdue
-              </div>
-            </div>
-          </div>
         </>
       )}
     </div>

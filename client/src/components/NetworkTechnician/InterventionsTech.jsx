@@ -1,6 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import axios from 'axios';
+import {
+  FiCheckCircle,
+  FiClock,
+  FiCalendar,
+  FiAlertCircle
+} from 'react-icons/fi';
 
 const InterventionsTech = () => {
   const currentUser = useSelector((state) => state.user?.currentUser);
@@ -37,11 +43,10 @@ const InterventionsTech = () => {
 
     fetchInterventions();
 
-    // Cleanup to prevent state updates on unmounted component
     return () => {
       // Cancel any ongoing requests or timers if needed
     };
-  }, [currentUser?._id, currentUser?.isActive]); // Added currentUser.isActive to dependencies
+  }, [currentUser?._id, currentUser?.isActive]);
 
   const formatDate = (dateString) => {
     const options = { year: 'numeric', month: 'short', day: 'numeric' };
@@ -56,7 +61,7 @@ const InterventionsTech = () => {
     switch (status.toLowerCase()) {
       case 'completed':
         return 'bg-green-100 text-green-800';
-      case 'in progress':
+      case 'in-progress':
         return 'bg-blue-100 text-blue-800';
       case 'planned':
         return 'bg-purple-100 text-purple-800';
@@ -80,6 +85,13 @@ const InterventionsTech = () => {
     }
   };
 
+  const isInterventionOverdue = (intervention) => {
+    if (intervention.status.toLowerCase() === 'completed' || intervention.status.toLowerCase() === 'cancelled') return false;
+    const plannedDate = new Date(intervention.plannedDate);
+    const today = new Date();
+    return plannedDate < today.setHours(0, 0, 0, 0);
+  };
+
   const handleResolveClick = (intervention) => {
     if (!currentUser?.isActive) return;
     setSelectedIntervention(intervention);
@@ -100,6 +112,23 @@ const InterventionsTech = () => {
       setError(err.response?.data?.message || 'Failed to fetch intervention details');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleStartClick = async (intervention) => {
+    if (!currentUser?.isActive) return;
+    try {
+      const response = await axios.put(`/api/interventions/${intervention._id}`, {
+        status: 'in-progress'
+      });
+      setInterventions((prev) =>
+        prev.map((int) =>
+          int._id === intervention._id ? response.data.data : int
+        )
+      );
+      setError(null);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to start intervention');
     }
   };
 
@@ -154,16 +183,6 @@ const InterventionsTech = () => {
     );
   }
 
-  if (error && !showResolveModal && !showDetailsModal) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-          <p>{error}</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold text-gray-800 mb-6">My Interventions</h1>
@@ -173,6 +192,56 @@ const InterventionsTech = () => {
           <p>Your account is inactive. You can view interventions but cannot perform actions.</p>
         </div>
       )}
+
+      {error && !showResolveModal && !showDetailsModal && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
+          <p>{error}</p>
+        </div>
+      )}
+
+      {/* Summary Header */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="stat bg-white rounded-lg px-6 py-4 border-l-4 border-green-500">
+          <div className="stat-figure text-green-500">
+            <FiCheckCircle size={28} />
+          </div>
+          <div className="stat-title text-gray-600">Completed</div>
+          <div className="stat-value text-green-500">
+            {interventions.filter(i => i.status.toLowerCase() === 'completed').length}
+          </div>
+          <div className="stat-desc text-gray-600">
+            {interventions.length > 0
+              ? `${Math.round((interventions.filter(i => i.status.toLowerCase() === 'completed').length / interventions.length) * 100)}% of total`
+              : '0% of total'}
+          </div>
+        </div>
+
+        <div className="stat bg-white rounded-lg px-6 py-4 border-l-4 border-blue-500">
+          <div className="stat-figure text-blue-500">
+            <FiClock size={28} />
+          </div>
+          <div className="stat-title text-gray-600">In Progress</div>
+          <div className="stat-value text-blue-500">
+            {interventions.filter(i => i.status.toLowerCase() === 'in-progress').length}
+          </div>
+          <div className="stat-desc text-gray-600">
+            {interventions.filter(i => i.status.toLowerCase() === 'in-progress' && isInterventionOverdue(i)).length} overdue
+          </div>
+        </div>
+
+        <div className="stat bg-white rounded-lg px-6 py-4 border-l-4 border-purple-500">
+          <div className="stat-figure text-purple-500">
+            <FiCalendar size={28} />
+          </div>
+          <div className="stat-title text-gray-600">Planned</div>
+          <div className="stat-value text-purple-500">
+            {interventions.filter(i => i.status.toLowerCase() === 'planned').length}
+          </div>
+          <div className="stat-desc text-gray-600">
+            {interventions.filter(i => i.status.toLowerCase() === 'planned' && isInterventionOverdue(i)).length} overdue
+          </div>
+        </div>
+      </div>
 
       {interventions.length === 0 ? (
         <div className="bg-white rounded-lg shadow p-6 text-center">
@@ -239,6 +308,20 @@ const InterventionsTech = () => {
                       >
                         View Details
                       </button>
+                      {intervention.status.toLowerCase() === 'planned' && (
+                        <button
+                          onClick={() => handleStartClick(intervention)}
+                          className={`px-3 py-1 rounded text-sm ${
+                            currentUser?.isActive
+                              ? 'bg-yellow-500 text-white hover:bg-yellow-600'
+                              : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                          }`}
+                          disabled={!currentUser?.isActive}
+                          aria-label={`Start intervention ${intervention._id}`}
+                        >
+                          Start
+                        </button>
+                      )}
                       {intervention.status.toLowerCase() !== 'completed' && (
                         <button
                           onClick={() => handleResolveClick(intervention)}

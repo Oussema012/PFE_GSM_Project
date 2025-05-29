@@ -1,33 +1,63 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { 
-  FiCheckCircle, 
-  FiXCircle, 
-  FiAlertCircle, 
-  FiTrash2, 
+import {
+  FiCheckCircle,
+  FiXCircle,
+  FiAlertCircle,
   FiRefreshCw,
   FiClock,
   FiCheck,
-  FiEye,
   FiEyeOff,
   FiFilter,
   FiSearch,
-  FiCalendar
+  FiCalendar,
+  FiPlus,
+  FiTrash2,
 } from 'react-icons/fi';
+import CreateAlert from '../NetworkEngineer/CreateAlert';
+import ResolveByType from '../NetworkEngineer/ResolveByType';
+import DeleteAlert from '../NetworkEngineer/DeleteAlert';
+import AcknowledgeAlert from '../NetworkEngineer/AcknowledgeAlert';
+import DetailAlert from '../NetworkEngineer/DetailAlert';
+
+// Validate site_reference format (e.g., "SITE001")
+const isValidSiteReference = (siteId) => /^[A-Z0-9]+$/.test(siteId);
 
 const DashNotifications = () => {
   const [alerts, setAlerts] = useState([]);
   const [siteId, setSiteId] = useState('');
-  const [filter, setFilter] = useState('active');
+  const [filter, setFilter] = useState('history'); // Default to 'history'
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [acknowledging, setAcknowledging] = useState(null);
-  const [resolving, setResolving] = useState(null);
   const [filteredAlerts, setFilteredAlerts] = useState([]);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showResolveByTypeModal, setShowResolveByTypeModal] = useState(false);
+  const [selectedAlert, setSelectedAlert] = useState(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [resolving, setResolving] = useState(null);
+  const [siteReferences, setSiteReferences] = useState([]);
+
+  axios.defaults.baseURL = 'http://localhost:3000';
+
+  // Fetch site references for dropdown
+  useEffect(() => {
+    const fetchSiteReferences = async () => {
+      try {
+        const response = await axios.get('/api/sites/references');
+        setSiteReferences(response.data);
+      } catch (error) {
+        console.error('Failed to fetch site references:', error);
+        setError('Failed to fetch site references. Using fallback options.');
+        // Fallback to known site references
+        setSiteReferences(['SITE001', 'SITE002']);
+      }
+    };
+    fetchSiteReferences();
+  }, []);
 
   const fetchAlerts = async () => {
     setLoading(true);
@@ -35,50 +65,77 @@ const DashNotifications = () => {
     setSuccessMessage('');
 
     try {
-      let url = 'http://localhost:3000/api/alerts';
-      
+      let url = '/api/alerts/history'; // Default to history endpoint
+
+      // Validate siteId if provided
+      if (siteId && !isValidSiteReference(siteId)) {
+        setError('Invalid site reference format (e.g., SITE001)');
+        setLoading(false);
+        return;
+      }
+
       if (siteId) {
-        if (filter === 'active') {
-          url = `http://localhost:3000/api/alerts/active/${siteId}`;
-        } else if (filter === 'resolved') {
-          url = `http://localhost:3000/api/alerts/resolved/${siteId}`;
-          if (startDate && endDate) {
-            if (new Date(endDate) < new Date(startDate)) {
-              setError('End date cannot be before start date');
-              setLoading(false);
-              return;
-            }
-            url += `?startDate=${startDate}&endDate=${endDate}`;
-          }
-        } else if (filter === 'history') {
-          url = `http://localhost:3000/api/alerts/history/${siteId}`;
-        } else {
-          throw new Error('Invalid filter configuration');
+        switch (filter) {
+          case 'active':
+            url = `/api/alerts/active/${siteId}`;
+            break;
+          case 'resolved':
+            url = `/api/alerts/history/resolved/${siteId}`;
+            break;
+          case 'history':
+            url = `/api/alerts/history/${siteId}`;
+            break;
+          default:
+            setError('Invalid filter configuration');
+            setLoading(false);
+            return;
         }
       } else {
-        if (filter === 'resolved') {
-          url = 'http://localhost:3000/api/alerts/resolved';
-          if (startDate && endDate) {
-            if (new Date(endDate) < new Date(startDate)) {
-              setError('End date cannot be before start date');
-              setLoading(false);
-              return;
-            }
-            url += `?startDate=${startDate}&endDate=${endDate}`;
-          }
-        } else if (filter === 'history') {
-          url = 'http://localhost:3000/api/alerts/history';
-        } else if (filter !== 'active') {
-          throw new Error('Invalid filter configuration');
+        switch (filter) {
+          case 'active':
+            url = '/api/alerts';
+            break;
+          case 'resolved':
+            url = `/api/alerts/resolved`;
+            break;
+          case 'history':
+            url = '/api/alerts/history';
+            break;
+          default:
+            setError('Invalid filter configuration');
+            setLoading(false);
+            return;
         }
       }
 
+      // Apply date range for 'resolved' or 'history' filters
+      if ((filter === 'resolved' || filter === 'history') && startDate && endDate) {
+        if (new Date(endDate) < new Date(startDate)) {
+          setError('End date cannot be before start date');
+          setLoading(false);
+          return;
+        }
+        const params = new URLSearchParams();
+        params.append('startDate', startDate);
+        params.append('endDate', endDate);
+        url += `?${params.toString()}`;
+      }
+
+      console.log(`Fetching alerts from: ${url}`);
       const response = await axios.get(url);
-      console.log('Fetched alerts:', JSON.stringify(response.data, null, 2));
-      setAlerts(Array.isArray(response.data) ? response.data : []);
+      const normalizedAlerts = Array.isArray(response.data)
+        ? response.data.map((alert) => ({
+            ...alert,
+            siteId: alert.siteId || 'N/A',
+          }))
+        : [];
+      setAlerts(normalizedAlerts);
+      console.log('Fetched alerts:', normalizedAlerts);
     } catch (err) {
+      console.error('Fetch alerts error:', err.response?.data || err.message);
       if (err.response?.status === 404) {
-        setError('Failed to fetch alerts: Endpoint not found. Please check site ID or server configuration.');
+        setError('No alerts found for the specified criteria.');
+        setAlerts([]);
       } else {
         setError(`Failed to fetch alerts: ${err.response?.data?.message || err.message}`);
       }
@@ -87,118 +144,116 @@ const DashNotifications = () => {
     }
   };
 
-  const acknowledgeAlert = async (id) => {
-    if (!/^[0-9a-fA-F]{24}$/.test(id)) {
-      setError('Invalid alert ID format');
-      return;
-    }
-
-    setAcknowledging(id);
-    setError('');
-    setSuccessMessage('');
-
-    const maxRetries = 3;
-    let attempt = 1;
-
-    while (attempt <= maxRetries) {
-      try {
-        const response = await axios.put(
-          `http://localhost:3000/api/alerts/acknowledge/${id}`,
-          { acknowledged: true }
-        );
-        console.log('Acknowledge response:', response.data);
-        setAlerts(alerts.map((alert) => (alert._id === id ? { ...alert, acknowledged: true, acknowledgedAt: new Date().toISOString() } : alert)));
-        setSuccessMessage('Alert acknowledged successfully');
-        setTimeout(() => setSuccessMessage(''), 3000);
-        break;
-      } catch (err) {
-        if (attempt === maxRetries) {
-          setError(`Failed to acknowledge alert after ${maxRetries} attempts: ${err.response?.data?.message || err.message}`);
-        }
-        attempt++;
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-    }
-    setAcknowledging(null);
-  };
-
   const resolveAlert = async (id) => {
-    if (!/^[0-9a-fA-F]{24}$/.test(id)) {
-      setError('Invalid alert ID format');
-      return;
-    }
-
     setResolving(id);
     setError('');
     setSuccessMessage('');
 
-    const maxRetries = 3;
-    let attempt = 1;
-
-    while (attempt <= maxRetries) {
-      try {
-        const response = await axios.put(
-          `http://localhost:3000/api/alerts/resolve/${id}`,
-          {
-            status: 'resolved',
-            resolvedAt: new Date().toISOString()
-          }
-        );
-        console.log('Resolve response:', response.data);
-        setAlerts(alerts.map((alert) => (alert._id === id ? { ...alert, ...response.data } : alert)));
-        setSuccessMessage('Alert resolved successfully');
-        setTimeout(() => setSuccessMessage(''), 3000);
-        break;
-      } catch (err) {
-        if (attempt === maxRetries) {
-          setError(`Failed to resolve alert after ${maxRetries} attempts: ${err.response?.data?.message || err.message}`);
-        }
-        attempt++;
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-    }
-    setResolving(null);
-  };
-
-  const deleteAlert = async (id) => {
-    if (!/^[0-9a-fA-F]{24}$/.test(id)) {
-      setError('Invalid alert ID format');
-      return;
-    }
-
-    setError('');
-    setSuccessMessage('');
-
-    const confirmDelete = window.confirm('Are you sure you want to delete this alert? This action cannot be undone.');
-    if (!confirmDelete) {
-      return;
-    }
+    // Optimistic update
+    setAlerts((prevAlerts) =>
+      prevAlerts.map((alert) =>
+        alert._id === id
+          ? { ...alert, status: 'resolved', resolvedAt: new Date().toISOString() }
+          : alert
+      )
+    );
 
     try {
-      await axios.delete(`http://localhost:3000/api/alerts/${id}`);
-      setAlerts(alerts.filter((alert) => alert._id !== id));
-      setSuccessMessage('Alert deleted successfully');
+      const response = await axios.put(`/api/alerts/resolve/${id}`);
+      const updatedAlert = response.data.alert;
+
+      setAlerts((prevAlerts) =>
+        prevAlerts.map((alert) =>
+          alert._id === id
+            ? {
+                ...alert,
+                status: updatedAlert.status,
+                resolvedAt: updatedAlert.resolvedAt,
+              }
+            : alert
+        )
+      );
+      setSuccessMessage('Alert resolved successfully');
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {
-      setError(`Failed to delete alert: ${err.response?.data?.message || err.message}`);
+      // Rollback optimistic update
+      setAlerts((prevAlerts) =>
+        prevAlerts.map((alert) =>
+          alert._id === id ? { ...alert, status: 'active', resolvedAt: null } : alert
+        )
+      );
+      setError(`Failed to resolve alert: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setResolving(null);
     }
   };
 
   useEffect(() => {
-    fetchAlerts();
-  }, [siteId, filter, startDate, endDate]);
-
-  useEffect(() => {
-    const filtered = alerts.filter(alert => {
+    const filtered = alerts.filter((alert) => {
       const query = searchQuery?.toLowerCase() || '';
+      const siteIdStr = alert.siteId || '';
       return (
-        (alert.site_id || '').toLowerCase().includes(query) ||
+        siteIdStr.toLowerCase().includes(query) ||
         (alert.type || '').toLowerCase().includes(query) ||
         (alert.message || '').toLowerCase().includes(query)
       );
     });
     setFilteredAlerts(filtered);
   }, [alerts, searchQuery]);
+
+  useEffect(() => {
+    fetchAlerts();
+  }, [siteId, filter, startDate, endDate]);
+
+  const handleFilterChange = (e) => {
+    const newFilter = e.target.value;
+    setFilter(newFilter);
+    if (newFilter === 'active') {
+      setStartDate('');
+      setEndDate('');
+    }
+  };
+
+  const handleCreateSuccess = (newAlert, message) => {
+    setAlerts([...alerts, { ...newAlert, siteId: newAlert.siteId || 'N/A' }]);
+    setSuccessMessage(message);
+    setTimeout(() => setSuccessMessage(''), 3000);
+  };
+
+  const handleResolveByTypeSuccess = ({ siteId, type }, message) => {
+    setAlerts(
+      alerts.map((alert) =>
+        alert.siteId === siteId && alert.type === type && alert.status === 'active'
+          ? { ...alert, status: 'resolved', resolvedAt: new Date().toISOString() }
+          : alert
+      )
+    );
+    setSuccessMessage(message);
+    setTimeout(() => setSuccessMessage(''), 3000);
+  };
+
+  const handleDeleteSuccess = (alertId, message) => {
+    setAlerts(alerts.filter((alert) => alert._id !== alertId));
+    setSuccessMessage(message);
+    setTimeout(() => setSuccessMessage(''), 3000);
+  };
+
+  const handleAcknowledgeSuccess = (alertId, updatedAlert, message) => {
+    setAlerts(
+      alerts.map((alert) =>
+        alert._id === alertId
+          ? { ...alert, acknowledged: true, acknowledgedAt: new Date().toISOString() }
+          : alert
+      )
+    );
+    setSuccessMessage(message);
+    setTimeout(() => setSuccessMessage(''), 3000);
+  };
+
+  const handleRowClick = (alert) => {
+    setSelectedAlert(alert);
+    setShowDetailModal(true);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -209,13 +264,29 @@ const DashNotifications = () => {
               <FiAlertCircle className="inline-block mr-2 text-indigo-600" />
               Alert Dashboard
             </h1>
-            <button
-              onClick={fetchAlerts}
-              className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
-            >
-              <FiRefreshCw className={`mr-2 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
+            <div className="flex space-x-2">
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+              >
+                <FiPlus className="mr-2" />
+                Create Alert
+              </button>
+              <button
+                onClick={() => setShowResolveByTypeModal(true)}
+                className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+              >
+                <FiCheckCircle className="mr-2" />
+                Resolve by Type
+              </button>
+              <button
+                onClick={fetchAlerts}
+                className="flex items-center px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+              >
+                <FiRefreshCw className={`mr-2 ${loading ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -264,36 +335,38 @@ const DashNotifications = () => {
                 />
               </div>
             </div>
-
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Site ID</label>
-              <input
-                type="text"
+              <label className="block text-sm font-medium text-gray-700 mb-1">Site Reference</label>
+              <select
                 value={siteId}
                 onChange={(e) => setSiteId(e.target.value)}
-                placeholder="All sites"
-                className="focus:ring-indigo-500 focus:border-indigo-500 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
-              />
+                className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-3 pr-10 py-2 border border-gray-300 rounded-md"
+              >
+                <option value="">All sites</option>
+                {siteReferences.map((ref) => (
+                  <option key={ref} value={ref}>
+                    {ref}
+                  </option>
+                ))}
+              </select>
             </div>
-
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
               <div className="relative">
                 <select
                   value={filter}
-                  onChange={(e) => setFilter(e.target.value)}
+                  onChange={handleFilterChange}
                   className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-3 pr-10 py-2 border border-gray-300 rounded-md appearance-none"
                 >
+                  <option value="history">All Alerts</option>
                   <option value="active">Active Alerts</option>
                   <option value="resolved">Resolved Alerts</option>
-                  <option value="history">All Alerts</option>
                 </select>
                 <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
                   <FiFilter className="text-gray-400" />
                 </div>
               </div>
             </div>
-
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Date Range</label>
               <div className="flex space-x-2">
@@ -303,7 +376,7 @@ const DashNotifications = () => {
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
                     className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-3 pr-10 py-2 border border-gray-300 rounded-md"
-                    disabled={filter !== 'resolved'}
+                    disabled={filter === 'active'}
                   />
                   <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
                     <FiCalendar className="text-gray-400" />
@@ -315,7 +388,7 @@ const DashNotifications = () => {
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
                     className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-3 pr-10 py-2 border border-gray-300 rounded-md"
-                    disabled={filter !== 'resolved'}
+                    disabled={filter === 'active'}
                   />
                   <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
                     <FiCalendar className="text-gray-400" />
@@ -325,6 +398,28 @@ const DashNotifications = () => {
             </div>
           </div>
         </div>
+
+        <CreateAlert
+          isOpen={showCreateModal}
+          onClose={() => setShowCreateModal(false)}
+          onSuccess={handleCreateSuccess}
+          onError={setError}
+          siteReferences={siteReferences}
+        />
+
+        <ResolveByType
+          isOpen={showResolveByTypeModal}
+          onClose={() => setShowResolveByTypeModal(false)}
+          onSuccess={handleResolveByTypeSuccess}
+          onError={setError}
+          siteReferences={siteReferences}
+        />
+
+        <DetailAlert
+          isOpen={showDetailModal}
+          onClose={() => setShowDetailModal(false)}
+          alert={selectedAlert}
+        />
 
         {loading && (
           <div className="flex justify-center items-center p-8">
@@ -345,28 +440,52 @@ const DashNotifications = () => {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Site ID
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      Site Reference
                     </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
                       Type
                     </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
                       Message
                     </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
                       Status
                     </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
                       <FiClock className="inline-block mr-1" /> Created
                     </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
                       <FiCheck className="inline-block mr-1" /> Resolved
                     </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
                       Acknowledged
                     </th>
-                    <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
                       Actions
                     </th>
                   </tr>
@@ -374,9 +493,13 @@ const DashNotifications = () => {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {filteredAlerts.length > 0 ? (
                     filteredAlerts.map((alert) => (
-                      <tr key={alert._id} className="hover:bg-gray-50">
+                      <tr
+                        key={alert._id}
+                        className="hover:bg-gray-50 cursor-pointer"
+                        onClick={() => handleRowClick(alert)}
+                      >
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {alert.site_id || 'N/A'}
+                          {alert.siteId || 'N/A'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
@@ -387,9 +510,13 @@ const DashNotifications = () => {
                           {alert.message || 'No message'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          <span className={`px-2 py-1 inline-flex items-center text-xs leading-5 font-semibold rounded-full ${
-                            alert.status === 'active' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
-                          }`}>
+                          <span
+                            className={`px-2 py-1 inline-flex items-center text-xs leading-5 font-semibold rounded-full ${
+                              alert.status === 'active'
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-green-100 text-green-800'
+                            }`}
+                          >
                             {alert.status === 'active' ? (
                               <FiXCircle className="mr-1" />
                             ) : (
@@ -420,36 +547,36 @@ const DashNotifications = () => {
                             {alert.status === 'active' && (
                               <>
                                 {!alert.acknowledged && (
-                                  <button
-                                    onClick={() => acknowledgeAlert(alert._id)}
-                                    className={`text-indigo-600 hover:text-indigo-900 ${
-                                      acknowledging === alert._id ? 'opacity-50 cursor-not-allowed' : ''
-                                    }`}
-                                    title="Acknowledge"
-                                    disabled={acknowledging === alert._id}
-                                  >
-                                    <FiEye className="h-5 w-5" />
-                                  </button>
+                                  <AcknowledgeAlert
+                                    alertId={alert._id}
+                                    onSuccess={handleAcknowledgeSuccess}
+                                    onError={setError}
+                                  />
                                 )}
                                 <button
-                                  onClick={() => resolveAlert(alert._id)}
-                                  className={`text-green-600 hover:text-green-900 ${
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    resolveAlert(alert._id);
+                                  }}
+                                  className={`flex items-center text-green-600 hover:text-green-900 ${
                                     resolving === alert._id ? 'opacity-50 cursor-not-allowed' : ''
                                   }`}
                                   title="Resolve"
                                   disabled={resolving === alert._id}
                                 >
-                                  <FiCheckCircle className="h-5 w-5" />
+                                  {resolving === alert._id ? (
+                                    <FiRefreshCw className="h-5 w-5 animate-spin" />
+                                  ) : (
+                                    <FiCheckCircle className="h-5 w-5" />
+                                  )}
                                 </button>
                               </>
                             )}
-                            <button
-                              onClick={() => deleteAlert(alert._id)}
-                              className="text-red-600 hover:text-red-900"
-                              title="Delete"
-                            >
-                              <FiTrash2 className="h-5 w-5" />
-                            </button>
+                            <DeleteAlert
+                              alertId={alert._id}
+                              onSuccess={handleDeleteSuccess}
+                              onError={setError}
+                            />
                           </div>
                         </td>
                       </tr>

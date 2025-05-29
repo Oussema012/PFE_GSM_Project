@@ -69,8 +69,8 @@ const NetworkTechnicianDashboard = () => {
 
   return (
     <div className="flex min-h-screen bg-gradient-to-br from-purple-50 to-purple-100">
-      {/* Sidebar - Gradient Purple */}
-      <div className="w-64 bg-gradient-to-b from-purple-900 to-purple-800 text-purple-100 flex flex-col p-0 shadow-xl">
+      {/* Fixed Sidebar - Gradient Purple */}
+      <div className="fixed top-0 left-0 w-64 h-screen bg-gradient-to-b from-purple-900 to-purple-800 text-purple-100 flex flex-col p-0 shadow-xl z-50">
         {/* Sidebar Header */}
         <div className="p-6 pb-4 border-b border-purple-700">
           <div className="flex items-center space-x-3">
@@ -188,13 +188,13 @@ const NetworkTechnicianDashboard = () => {
             className="flex items-center w-full px-4 py-2 text-sm text-purple-200 hover:text-white rounded-lg hover:bg-purple-700/50 transition-all"
           >
             <FaSignOutAlt className="mr-3" />
-             Logout
+            Logout
           </button>
         </div>
       </div>
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Main Content Area with Margin to Account for Fixed Sidebar */}
+      <div className="flex-1 flex flex-col overflow-hidden ml-64">
         {/* Header */}
         <header className="bg-white/90 backdrop-blur-sm shadow-sm border-b border-purple-100/50">
           <div className="flex items-center justify-between px-6 py-3">

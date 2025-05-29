@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
+import { useDispatch } from "react-redux";
 import {
   FaHome,
   FaServer,
@@ -11,8 +12,9 @@ import {
   FaNetworkWired,
   FaProjectDiagram,
   FaTools,
-  FaChartPie // New icon for Statistics Dashboard
+  FaChartPie
 } from "react-icons/fa";
+import { signoutSuccess } from '../redux/user/userSlice';
 import axios from 'axios';
 import NetworkOverview from "../components/NetworkEngineer/NetworkOverview";
 import NetworkDeviceManagement from "../components/NetworkEngineer/NetworkDeviceManagement";
@@ -21,7 +23,7 @@ import NetworkReports from "../components/NetworkEngineer/NetworkReports";
 import NetworkAlerts from "../components/NetworkEngineer/NetworkAlerts";
 import NetworkSettings from "../components/NetworkEngineer/NetworkSettings";
 import Notifications from "../components/NetworkEngineer/Notification";
-import StatisticsDashboard from "../components/NetworkEngineer/StatisticsDashboard"; // New component
+import StatisticsDashboard from "../components/NetworkEngineer/StatisticsDashboard";
 
 const NotificationDropdown = ({ onClose }) => {
   const [notifications, setNotifications] = useState([]);
@@ -173,6 +175,7 @@ const NotificationDropdown = ({ onClose }) => {
 const NetworkEngineerDashboard = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const dispatch = useDispatch();
   const [activeTab, setActiveTab] = useState('overview');
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -209,6 +212,16 @@ const NetworkEngineerDashboard = () => {
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
 
+  const handleSignOut = async () => {
+    try {
+      await axios.post('http://localhost:3000/signout');
+      dispatch(signoutSuccess());
+      navigate('/signin');
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
+
   const networkStats = {
     totalDevices: 89,
     activeDevices: 82,
@@ -228,7 +241,8 @@ const NetworkEngineerDashboard = () => {
 
   return (
     <div className="flex min-h-screen bg-teal-50">
-      <div className="w-64 bg-teal-800 text-white flex flex-col p-0 shadow-xl">
+      {/* Fixed Sidebar */}
+      <div className="fixed top-0 left-0 w-64 h-screen bg-teal-800 text-white flex flex-col p-0 shadow-xl z-50">
         <div className="p-6 pb-4 border-b border-teal-700">
           <div className="flex items-center space-x-3">
             <FaNetworkWired className="text-2xl text-teal-300" />
@@ -249,7 +263,7 @@ const NetworkEngineerDashboard = () => {
               { tab: 'alerts', icon: FaBell, text: 'Network Alerts', badge: networkStats.networkAlerts },
               { tab: 'notifications', icon: FaBell, text: 'Notifications', badge: unreadCount },
               { tab: 'tools', icon: FaTools, text: 'Network Tools', badge: null },
-              { tab: 'statistics', icon: FaChartPie, text: 'Statistics Dashboard', badge: null } // New tab
+              { tab: 'statistics', icon: FaChartPie, text: 'Statistics Dashboard', badge: null }
             ].map(({ tab, icon: Icon, text, badge }) => (
               <li key={tab}>
                 <Link 
@@ -273,6 +287,7 @@ const NetworkEngineerDashboard = () => {
         
         <div className="p-4 border-t border-teal-700">
           <button 
+            onClick={handleSignOut}
             className="flex items-center w-full px-4 py-2 text-sm text-teal-200 hover:text-white rounded-lg hover:bg-teal-700 transition"
           >
             <FaSignOutAlt className="mr-3" />
@@ -281,7 +296,8 @@ const NetworkEngineerDashboard = () => {
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Main Content Area with Margin to Account for Fixed Sidebar */}
+      <div className="flex-1 flex flex-col overflow-hidden ml-64">
         <header className="bg-white shadow-sm">
           <div className="flex items-center justify-between px-6 py-4">
             <div className="relative w-64">
@@ -332,7 +348,7 @@ const NetworkEngineerDashboard = () => {
           {activeTab === 'alerts' && <NetworkAlerts />}
           {activeTab === 'notifications' && <Notifications />}
           {activeTab === 'tools' && <NetworkSettings />}
-          {activeTab === 'statistics' && <StatisticsDashboard />} {/* New element */}
+          {activeTab === 'statistics' && <StatisticsDashboard />}
         </main>
       </div>
     </div>
