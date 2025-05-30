@@ -216,5 +216,5 @@ const deleteNotification = async (req, res) => {
 module.exports = {
   checkMaintenanceNotifications,
   checkAndCreateNotifications,
-  
+  getNotifications,
 };

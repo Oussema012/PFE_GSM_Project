@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
-import { useSelector, useDispatch } from "react-redux";
-import { 
-  FaTachometerAlt, 
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { useSelector, useDispatch } from 'react-redux';
+import {
+  FaTachometerAlt,
   FaServer,
   FaProjectDiagram,
   FaChartLine,
@@ -12,18 +12,18 @@ import {
   FaUserCircle,
   FaSearch,
   FaBell,
-  FaNetworkWired
-} from "react-icons/fa";
+  FaNetworkWired,
+} from 'react-icons/fa';
 import { signoutSuccess } from '../redux/user/userSlice';
 import axios from 'axios';
 
 // Import components
-import NetworkHealthDashboard from "../components/NetworkTechnician/NetworkHealthDashboard";
-import InterventionsTech from "../components/NetworkTechnician/InterventionsTech";
-import LiveTopologyViewer from "../components/NetworkTechnician/LiveTopologyViewer";
-import TrafficAnalyzer from "../components/NetworkTechnician/TrafficAnalyzer";
-import AlertWarRoom from "../components/NetworkTechnician/AlertWarRoom";
-import TechToolbox from "../components/NetworkTechnician/TechToolbox";
+import NetworkHealthDashboard from '../components/NetworkTechnician/NetworkHealthDashboard';
+import InterventionsTech from '../components/NetworkTechnician/InterventionsTech';
+import LiveTopologyViewer from '../components/NetworkTechnician/LiveTopologyViewer';
+import TrafficAnalyzer from '../components/NetworkTechnician/TrafficAnalyzer';
+import AlertWarRoom from '../components/NetworkTechnician/AlertWarRoom';
+import TechToolbox from '../components/NetworkTechnician/TechToolbox';
 
 const NetworkTechnicianDashboard = () => {
   const navigate = useNavigate();
@@ -31,7 +31,12 @@ const NetworkTechnicianDashboard = () => {
   const dispatch = useDispatch();
   const [activeTab, setActiveTab] = useState('health');
   const { currentUser } = useSelector((state) => state.user);
-  
+  const [notificationCounts, setNotificationCounts] = useState({
+    maintenance: 0,
+    intervention: 0,
+  });
+
+  // Set active tab from URL
   useEffect(() => {
     const urlParams = new URLSearchParams(location.search);
     const tabFromUrl = urlParams.get('tab');
@@ -40,21 +45,55 @@ const NetworkTechnicianDashboard = () => {
     }
   }, [location.search]);
 
-  // Network metrics data
+  // Fetch unread notification counts
+  useEffect(() => {
+    const fetchNotificationCounts = async () => {
+      try {
+        // Fetch maintenance notifications
+        const maintenanceResponse = await axios.get('http://localhost:3000/api/notifications', {
+          params: {
+            notificationCategory: 'maintenance',
+            read: 'false',
+            email: currentUser?.email,
+          },
+        });
+        // Fetch intervention notifications
+        const interventionResponse = await axios.get('http://localhost:3000/api/notifications', {
+          params: {
+            notificationCategory: 'intervention',
+            read: 'false',
+            email: currentUser?.email,
+          },
+        });
+        setNotificationCounts({
+          maintenance: maintenanceResponse.data.total,
+          intervention: interventionResponse.data.total,
+        });
+      } catch (error) {
+        console.error('Error fetching notification counts:', error);
+      }
+    };
+
+    if (currentUser?.email) {
+      fetchNotificationCounts();
+    }
+  }, [currentUser?.email]);
+
+  // Network metrics data (unchanged)
   const networkMetrics = {
     totalNodes: 47,
     criticalNodes: 3,
     activeAlerts: 5,
-    bandwidthUtilization: "78%",
-    avgLatency: "34ms",
-    packetLoss: "0.2%",
-    uptime: "99.95%"
+    bandwidthUtilization: '78%',
+    avgLatency: '34ms',
+    packetLoss: '0.2%',
+    uptime: '99.95%',
   };
 
   const recentIncidents = [
-    { id: 1, device: "Core Switch A", event: "High CPU utilization (92%)", time: "8 mins ago", severity: "high" },
-    { id: 2, device: "Router Cluster", event: "BGP neighbor down", time: "15 mins ago", severity: "critical" },
-    { id: 3, device: "Firewall-01", event: "DDoS mitigation activated", time: "42 mins ago", severity: "medium" }
+    { id: 1, device: 'Core Switch A', event: 'High CPU utilization (92%)', time: '8 mins ago', severity: 'high' },
+    { id: 2, device: 'Router Cluster', event: 'BGP neighbor down', time: '15 mins ago', severity: 'critical' },
+    { id: 3, device: 'Firewall-01', event: 'DDoS mitigation activated', time: '42 mins ago', severity: 'medium' },
   ];
 
   const handleSignOut = async () => {
@@ -82,16 +121,16 @@ const NetworkTechnicianDashboard = () => {
             <div className="text-xs truncate mt-1">{currentUser?.email}</div>
           </div>
         </div>
-        
+
         {/* Navigation */}
         <nav className="flex-1 p-4 overflow-y-auto">
           <ul className="space-y-2">
             <li>
-              <Link 
-                to="/technician-dashboard?tab=health" 
+              <Link
+                to="/technician-dashboard?tab=health"
                 className={`flex items-center px-4 py-3 rounded-lg transition-all ${
-                  activeTab === 'health' 
-                    ? 'bg-purple-700 text-white shadow-md' 
+                  activeTab === 'health'
+                    ? 'bg-purple-700 text-white shadow-md'
                     : 'hover:bg-purple-700/50 hover:text-white'
                 }`}
               >
@@ -105,27 +144,29 @@ const NetworkTechnicianDashboard = () => {
               </Link>
             </li>
             <li>
-              <Link 
-                to="/technician-dashboard?tab=intervention" 
+              <Link
+                to="/technician-dashboard?tab=intervention"
                 className={`flex items-center px-4 py-3 rounded-lg transition-all ${
-                  activeTab === 'intervention' 
-                    ? 'bg-purple-700 text-white shadow-md' 
+                  activeTab === 'intervention'
+                    ? 'bg-purple-700 text-white shadow-md'
                     : 'hover:bg-purple-700/50 hover:text-white'
                 }`}
               >
                 <FaServer className="mr-3 text-purple-300" />
-                Interventions
-                <span className="ml-auto bg-purple-600/90 text-xs font-semibold px-2 py-1 rounded-full">
-                  {networkMetrics.totalNodes}
-                </span>
+                Notifications
+                {(notificationCounts.maintenance + notificationCounts.intervention) > 0 && (
+                  <span className="ml-auto bg-purple-600/90 text-xs font-semibold px-2 py-1 rounded-full">
+                    {notificationCounts.maintenance + notificationCounts.intervention}
+                  </span>
+                )}
               </Link>
             </li>
             <li>
-              <Link 
-                to="/technician-dashboard?tab=topologyViewer" 
+              <Link
+                to="/technician-dashboard?tab=topologyViewer"
                 className={`flex items-center px-4 py-3 rounded-lg transition-all ${
-                  activeTab === 'topologyViewer' 
-                    ? 'bg-purple-700 text-white shadow-md' 
+                  activeTab === 'topologyViewer'
+                    ? 'bg-purple-700 text-white shadow-md'
                     : 'hover:bg-purple-700/50 hover:text-white'
                 }`}
               >
@@ -134,11 +175,11 @@ const NetworkTechnicianDashboard = () => {
               </Link>
             </li>
             <li>
-              <Link 
-                to="/technician-dashboard?tab=trafficAnalyzer" 
+              <Link
+                to="/technician-dashboard?tab=trafficAnalyzer"
                 className={`flex items-center px-4 py-3 rounded-lg transition-all ${
-                  activeTab === 'trafficAnalyzer' 
-                    ? 'bg-purple-700 text-white shadow-md' 
+                  activeTab === 'trafficAnalyzer'
+                    ? 'bg-purple-700 text-white shadow-md'
                     : 'hover:bg-purple-700/50 hover:text-white'
                 }`}
               >
@@ -150,11 +191,11 @@ const NetworkTechnicianDashboard = () => {
               </Link>
             </li>
             <li>
-              <Link 
-                to="/technician-dashboard?tab=AlertWarRoom" 
+              <Link
+                to="/technician-dashboard?tab=AlertWarRoom"
                 className={`flex items-center px-4 py-3 rounded-lg transition-all ${
-                  activeTab === 'AlertWarRoom' 
-                    ? 'bg-purple-700 text-white shadow-md' 
+                  activeTab === 'AlertWarRoom'
+                    ? 'bg-purple-700 text-white shadow-md'
                     : 'hover:bg-purple-700/50 hover:text-white'
                 }`}
               >
@@ -166,11 +207,11 @@ const NetworkTechnicianDashboard = () => {
               </Link>
             </li>
             <li>
-              <Link 
-                to="/technician-dashboard?tab=ToolBox" 
+              <Link
+                to="/technician-dashboard?tab=ToolBox"
                 className={`flex items-center px-4 py-3 rounded-lg transition-all ${
-                  activeTab === 'ToolBox' 
-                    ? 'bg-purple-700 text-white shadow-md' 
+                  activeTab === 'ToolBox'
+                    ? 'bg-purple-700 text-white shadow-md'
                     : 'hover:bg-purple-700/50 hover:text-white'
                 }`}
               >
@@ -180,10 +221,10 @@ const NetworkTechnicianDashboard = () => {
             </li>
           </ul>
         </nav>
-        
+
         {/* Sidebar Footer */}
         <div className="p-4 border-t border-purple-700">
-          <button 
+          <button
             onClick={handleSignOut}
             className="flex items-center w-full px-4 py-2 text-sm text-purple-200 hover:text-white rounded-lg hover:bg-purple-700/50 transition-all"
           >
@@ -212,21 +253,26 @@ const NetworkTechnicianDashboard = () => {
                 <span className="text-xs text-purple-500">Ctrl+K</span>
               </div>
             </div>
-            
+
             {/* Status Indicators */}
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2">
                 <div className="h-2 w-2 rounded-full bg-green-500"></div>
                 <span className="text-xs font-medium">NOC Connected</span>
               </div>
-              
-              <button className="relative p-2 text-purple-500 hover:text-purple-700 rounded-full hover:bg-purple-100 transition-all">
+
+              <Link
+                to="/technician-dashboard?tab=intervention"
+                className="relative p-2 text-purple-500 hover:text-purple-700 rounded-full hover:bg-purple-100 transition-all"
+              >
                 <FaBell className="text-lg" />
-                {networkMetrics.activeAlerts > 0 && (
-                  <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
+                {(notificationCounts.maintenance + notificationCounts.intervention) > 0 && (
+                  <span className="absolute top-0 right-0 w-4 h-4 bg-red-500 rounded-full text-xs text-white flex items-center justify-center">
+                    {notificationCounts.maintenance + notificationCounts.intervention}
+                  </span>
                 )}
-              </button>
-              
+              </Link>
+
               <div className="flex items-center space-x-2">
                 <div className="text-right hidden md:block">
                   <div className="font-medium text-gray-800">{currentUser?.username || 'Network Technician'}</div>

@@ -1,57 +1,89 @@
 const express = require('express');
-const Notification = require('../models/Notification');
 const router = express.Router();
-const { checkAndCreateNotifications } = require('../notificationRules/checkMaintenanceNotifications');
+const { checkAndCreateInterventionNotifications } = require('../notificationRules/checkInterventionNotifications');
+const Notification = require('../models/Notification');
+const Equipment = require('../models/Equipment');
+const Maintenance = require('../models/Maintenance');
+const Intervention = require('../models/Intervention');
 
-// Check and Create Notifications
+// Check and Create Intervention Notifications
 router.post('/check', async (req, res) => {
   try {
-    await checkAndCreateNotifications();
-    res.status(200).json({ message: 'Checked and created notifications successfully' });
+    const result = await checkAndCreateInterventionNotifications();
+    console.log('Intervention notification check completed:', result);
+    res.status(200).json(result);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Error running notification check', error: error.message });
+    console.error('Error running intervention notification check:', error.message);
+    res.status(500).json({
+      success: false,
+      message: 'Error running intervention notification check',
+      error: error.message,
+    });
   }
 });
 
-// Get All Notifications
+// Get All Notifications with Optional Filters
 router.get('/', async (req, res) => {
   try {
-    const { read, type, email, page = 1, limit = 10 } = req.query;
+    const { read, type, email, notificationCategory, page = 1, limit = 10 } = req.query;
     const filter = {};
 
+    // Filter by read status
     if (read) {
       if (read !== 'true' && read !== 'false') {
-        return res.status(400).json({ message: 'Invalid value for "read" parameter. Use "true" or "false".' });
+        return res.status(400).json({
+          message: 'Invalid value for "read" parameter. Use "true" or "false".',
+        });
       }
       filter.read = read === 'true';
     }
 
+    // Filter by notification type (e.g., intervention_upcoming, overdue)
     if (type) {
       filter.type = type;
     }
 
+    // Filter by email
     if (email) {
       filter.emailTo = email;
+    }
+
+    // Filter by notification category (maintenance or intervention)
+    if (notificationCategory) {
+      if (notificationCategory === 'maintenance') {
+        filter.maintenanceId = { $exists: true, $ne: null };
+      } else if (notificationCategory === 'intervention') {
+        filter.interventionId = { $exists: true, $ne: null };
+      } else {
+        return res.status(400).json({
+          message: 'Invalid value for "notificationCategory". Use "maintenance" or "intervention".',
+        });
+      }
     }
 
     const notifications = await Notification.find(filter)
       .populate('equipmentId', 'name')
       .populate('maintenanceId', 'description performedBy status')
-      .skip((page - 1) * limit)
+      .populate('interventionId', 'description plannedDate status technician')
+      .skip((parseInt(page) - 1) * parseInt(limit))
       .limit(parseInt(limit));
 
     const totalNotifications = await Notification.countDocuments(filter);
+
+    console.log(`Fetched ${notifications.length} notifications for page ${page}, filter:`, filter);
 
     res.status(200).json({
       notifications,
       total: totalNotifications,
       page: parseInt(page),
-      totalPages: Math.ceil(totalNotifications / limit),
+      totalPages: Math.ceil(totalNotifications / parseInt(limit)),
     });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Error fetching notifications', error: error.message });
+    console.error('Error fetching notifications:', error.message);
+    res.status(500).json({
+      message: 'Error fetching notifications',
+      error: error.message,
+    });
   }
 });
 
@@ -59,6 +91,12 @@ router.get('/', async (req, res) => {
 router.put('/:id/read', async (req, res) => {
   try {
     const notificationId = req.params.id;
+
+    // Validate ObjectId
+    if (!Notification.Types.ObjectId.isValid(notificationId)) {
+      return res.status(400).json({ message: 'Invalid notification ID' });
+    }
+
     const notification = await Notification.findById(notificationId);
 
     if (!notification) {
@@ -69,10 +107,18 @@ router.put('/:id/read', async (req, res) => {
     notification.readAt = new Date();
     await notification.save();
 
-    res.status(200).json({ message: 'Notification marked as read', notification });
+    console.log(`Notification ${notificationId} marked as read`);
+
+    res.status(200).json({
+      message: 'Notification marked as read',
+      notification,
+    });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Error marking notification as read', error: error.message });
+    console.error('Error marking notification as read:', error.message);
+    res.status(500).json({
+      message: 'Error marking notification as read',
+      error: error.message,
+    });
   }
 });
 
@@ -80,16 +126,27 @@ router.put('/:id/read', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const notificationId = req.params.id;
+
+    // Validate ObjectId
+    if (!Notification.Types.ObjectId.isValid(notificationId)) {
+      return res.status(400).json({ message: 'Invalid notification ID' });
+    }
+
     const notification = await Notification.findByIdAndDelete(notificationId);
 
     if (!notification) {
       return res.status(404).json({ message: 'Notification not found' });
     }
 
+    console.log(`Notification ${notificationId} deleted`);
+
     res.status(200).json({ message: 'Notification deleted successfully' });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Error deleting notification', error: error.message });
+    console.error('Error deleting notification:', error.message);
+    res.status(500).json({
+      message: 'Error deleting notification',
+      error: error.message,
+    });
   }
 });
 
