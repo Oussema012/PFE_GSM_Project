@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { FaBell, FaFilter, FaSearch } from "react-icons/fa";
+import { FaBell, FaFilter, FaExclamationTriangle, FaClock } from "react-icons/fa";
 import axios from 'axios';
 import { Link } from "react-router-dom";
 
@@ -17,7 +17,6 @@ const Notifications = () => {
     email: ''
   });
 
-  // Fetch notifications
   const fetchNotifications = async () => {
     setLoading(true);
     try {
@@ -42,18 +41,16 @@ const Notifications = () => {
     }
   };
 
-  // Trigger manual notification check
   const checkNotifications = async () => {
     try {
       await axios.post('http://localhost:3000/api/notifications/check');
-      fetchNotifications(); // Refresh notifications
+      fetchNotifications();
     } catch (err) {
       setError('Failed to check notifications');
       console.error('Error checking notifications:', err);
     }
   };
 
-  // Mark notification as read
   const markAsRead = async (id) => {
     try {
       await axios.put(`http://localhost:3000/api/notifications/${id}/read`);
@@ -64,7 +61,6 @@ const Notifications = () => {
     }
   };
 
-  // Delete notification
   const deleteNotification = async (id) => {
     try {
       await axios.delete(`http://localhost:3000/api/notifications/${id}`);
@@ -79,14 +75,12 @@ const Notifications = () => {
     }
   };
 
-  // Handle filter changes
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
     setFilters(prev => ({ ...prev, [name]: value }));
-    setPage(1); // Reset to first page on filter change
+    setPage(1);
   };
 
-  // Fetch notifications on mount and when page or filters change
   useEffect(() => {
     fetchNotifications();
   }, [page, filters]);
@@ -94,10 +88,10 @@ const Notifications = () => {
   return (
     <div className="min-h-screen bg-teal-50 p-6">
       {/* Header */}
-      <header className="bg-white shadow-sm rounded-lg p-4 mb-6">
+      <header className="bg-white shadow-md rounded-xl p-6 mb-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <FaBell className="text-2xl text-teal-600" />
+            <FaBell className="text-3xl text-teal-600" />
             <h1 className="text-2xl font-bold text-gray-800">All Notifications</h1>
           </div>
           <div className="flex items-center space-x-4">
@@ -118,7 +112,7 @@ const Notifications = () => {
       </header>
 
       {/* Filters */}
-      <div className="bg-white shadow-sm rounded-lg p-4 mb-6">
+      <div className="bg-white shadow-md rounded-xl p-6 mb-6">
         <div className="flex items-center space-x-4">
           <FaFilter className="text-teal-600" />
           <h2 className="text-lg font-semibold text-gray-800">Filters</h2>
@@ -165,31 +159,40 @@ const Notifications = () => {
       </div>
 
       {/* Notifications List */}
-      <div className="bg-white shadow-sm rounded-lg overflow-hidden">
+      <div className="bg-white shadow-md rounded-xl overflow-hidden">
         {loading && (
-          <div className="p-4 text-center text-gray-500">Loading notifications...</div>
+          <div className="p-6 text-center text-gray-500">Loading notifications...</div>
         )}
         {error && (
-          <div className="p-4 text-center text-red-500">{error}</div>
+          <div className="p-6 text-center text-red-500">{error}</div>
         )}
         {!loading && !error && notifications.length === 0 && (
-          <div className="p-4 text-center text-gray-500">No notifications found</div>
+          <div className="p-6 text-center text-gray-500">No notifications found</div>
         )}
         {!loading && !error && notifications.length > 0 && (
           <div className="divide-y divide-gray-200">
             {notifications.map(notification => (
               <div
                 key={notification._id}
-                className={`p-4 hover:bg-gray-50 transition ${
+                className={`p-6 hover:bg-gray-50 transition ${
                   notification.read ? 'bg-gray-100' : 'bg-white'
-                }`}
+                } shadow-sm rounded-lg m-2`}
               >
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
-                    <div className="flex items-center space-x-2">
-                      <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                        notification.type === 'overdue' ? 'bg-red-100 text-red-600' : 'bg-teal-100 text-teal-600'
-                      }`}>
+                    <div className="flex items-center space-x-3 mb-2">
+                      {notification.type === 'overdue' ? (
+                        <FaExclamationTriangle className="text-red-600 text-lg" />
+                      ) : (
+                        <FaClock className="text-teal-600 text-lg" />
+                      )}
+                      <span
+                        className={`text-xs font-semibold px-3 py-1 rounded-full shadow-sm ${
+                          notification.type === 'overdue'
+                            ? 'bg-red-200 text-red-800'
+                            : 'bg-teal-200 text-teal-800'
+                        }`}
+                      >
                         {notification.type.charAt(0).toUpperCase() + notification.type.slice(1)}
                       </span>
                       <span className="text-xs text-gray-500">
@@ -199,38 +202,41 @@ const Notifications = () => {
                         })}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-800 mt-1">{notification.message}</p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Equipment: {notification.equipmentId?.name || 'Unknown'}
+                    <p className="text-base font-medium text-gray-900 mt-1">{notification.message}</p>
+                    <p className="text-sm text-gray-600 mt-1">
+                      <span className="font-semibold">Equipment:</span> {notification.equipmentId?.name || 'Unknown'}
                     </p>
                     {notification.maintenanceId?.performedBy && (
-                      <p className="text-xs text-gray-500">
-                        Technician: {notification.maintenanceId.performedBy}
+                      <p className="text-sm text-gray-600">
+                        <span className="font-semibold">Technician:</span> {notification.maintenanceId.performedBy}
                       </p>
                     )}
-                    <p className="text-xs text-gray-500">
-                      Scheduled: {new Date(notification.scheduledDate).toLocaleString('en-US', {
+                    <p className="text-sm text-gray-600">
+                      <span className="font-semibold">Scheduled:</span>{' '}
+                      {new Date(notification.scheduledDate).toLocaleString('en-US', {
                         dateStyle: 'short',
                         timeStyle: 'short'
                       })}
                     </p>
                   </div>
-                  <div className="flex space-x-2">
+                  <div className="flex space-x-3 items-center">
                     {!notification.read && (
                       <button
                         onClick={() => markAsRead(notification._id)}
-                        className="text-teal-600 hover:text-teal-800 text-xs"
+                        className="text-teal-600 hover:text-teal-800"
                         title="Mark as read"
+                        aria-label="Mark notification as read"
                       >
-                        <FaBell />
+                        <FaBell className="w-5 h-5" />
                       </button>
                     )}
                     <button
                       onClick={() => deleteNotification(notification._id)}
-                      className="text-red-600 hover:text-red-800 text-xs"
+                      className="text-red-600 hover:text-red-800"
                       title="Delete"
+                      aria-label="Delete notification"
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
                       </svg>
                     </button>
@@ -244,7 +250,7 @@ const Notifications = () => {
 
       {/* Pagination */}
       {!loading && totalPages > 1 && (
-        <div className="mt-4 flex justify-between items-center">
+        <div className="mt-6 flex justify-between items-center">
           <div className="text-sm text-gray-600">
             Showing {(page - 1) * limit + 1} to {Math.min(page * limit, totalNotifications)} of {totalNotifications} notifications
           </div>
