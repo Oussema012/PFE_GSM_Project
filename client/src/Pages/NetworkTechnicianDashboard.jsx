@@ -153,7 +153,7 @@ const NetworkTechnicianDashboard = () => {
                 }`}
               >
                 <FaServer className="mr-3 text-purple-300" />
-                Notifications
+                Interventions
                 {(notificationCounts.maintenance + notificationCounts.intervention) > 0 && (
                   <span className="ml-auto bg-purple-600/90 text-xs font-semibold px-2 py-1 rounded-full">
                     {notificationCounts.maintenance + notificationCounts.intervention}
@@ -171,7 +171,7 @@ const NetworkTechnicianDashboard = () => {
                 }`}
               >
                 <FaProjectDiagram className="mr-3 text-purple-300" />
-                Live Topology
+                Maintenance
               </Link>
             </li>
             <li>
@@ -184,41 +184,14 @@ const NetworkTechnicianDashboard = () => {
                 }`}
               >
                 <FaChartLine className="mr-3 text-purple-300" />
-                Traffic Analyzer
+                Map
                 <span className="ml-auto bg-purple-600/90 text-xs font-semibold px-2 py-1 rounded-full">
                   {networkMetrics.bandwidthUtilization}
                 </span>
               </Link>
             </li>
-            <li>
-              <Link
-                to="/technician-dashboard?tab=AlertWarRoom"
-                className={`flex items-center px-4 py-3 rounded-lg transition-all ${
-                  activeTab === 'AlertWarRoom'
-                    ? 'bg-purple-700 text-white shadow-md'
-                    : 'hover:bg-purple-700/50 hover:text-white'
-                }`}
-              >
-                <FaExclamationTriangle className="mr-3 text-purple-300" />
-                Alert War Room
-                <span className="ml-auto bg-red-500/90 text-xs font-semibold px-2 py-1 rounded-full">
-                  {networkMetrics.activeAlerts}
-                </span>
-              </Link>
-            </li>
-            <li>
-              <Link
-                to="/technician-dashboard?tab=ToolBox"
-                className={`flex items-center px-4 py-3 rounded-lg transition-all ${
-                  activeTab === 'ToolBox'
-                    ? 'bg-purple-700 text-white shadow-md'
-                    : 'hover:bg-purple-700/50 hover:text-white'
-                }`}
-              >
-                <FaTools className="mr-3 text-purple-300" />
-                Tech Toolbox
-              </Link>
-            </li>
+        
+           
           </ul>
         </nav>
 

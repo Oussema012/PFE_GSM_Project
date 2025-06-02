@@ -258,11 +258,11 @@ const NetworkEngineerDashboard = () => {
             {[
               { tab: 'overview', icon: FaHome, text: 'Network Overview', badge: null },
               { tab: 'devices', icon: FaServer, text: 'Device Management', badge: networkStats.totalDevices },
-              { tab: 'topology', icon: FaProjectDiagram, text: 'Network Topology', badge: null },
-              { tab: 'reports', icon: FaChartBar, text: 'Performance Reports', badge: null },
-              { tab: 'alerts', icon: FaBell, text: 'Network Alerts', badge: networkStats.networkAlerts },
+              { tab: 'topology', icon: FaProjectDiagram, text: 'Interventions Management', badge: null },
+              { tab: 'reports', icon: FaChartBar, text: 'User Management', badge: null },
+              { tab: 'alerts', icon: FaBell, text: 'Alert Management', badge: networkStats.networkAlerts },
               { tab: 'notifications', icon: FaBell, text: 'Notifications', badge: unreadCount },
-              { tab: 'tools', icon: FaTools, text: 'Network Tools', badge: null },
+              { tab: 'tools', icon: FaTools, text: 'Maintenance Schedule', badge: null },
               { tab: 'statistics', icon: FaChartPie, text: 'Statistics Dashboard', badge: null }
             ].map(({ tab, icon: Icon, text, badge }) => (
               <li key={tab}>

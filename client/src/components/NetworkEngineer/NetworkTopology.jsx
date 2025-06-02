@@ -783,7 +783,15 @@ const NetworkTopology = () => {
                   filteredInterventions.map((intervention) => (
                     <tr
                       key={intervention._id}
-                      className="hover:bg-gray-50"
+                      className={`${
+                        intervention.status === 'completed'
+                          ? 'bg-green-50 hover:bg-green-100'
+                          : intervention.status === 'planned'
+                          ? 'bg-red-50 hover:bg-red-100'
+                          : intervention.status === 'in-progress'
+                          ? 'bg-orange-50 hover:bg-orange-100'
+                          : 'hover:bg-gray-50'
+                      }`}
                       role="row"
                     >
                       <td

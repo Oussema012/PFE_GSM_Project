@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useSelector } from 'react-redux';
 import axios from 'axios';
+import PropTypes from 'prop-types';
 import {
   FiCheckCircle,
   FiClock,
   FiCalendar,
-  FiAlertCircle
 } from 'react-icons/fi';
 
 const InterventionsTech = () => {
@@ -20,45 +20,49 @@ const InterventionsTech = () => {
   const [validatedBy, setValidatedBy] = useState('');
   const [interventionDetails, setInterventionDetails] = useState(null);
 
+  // Fetch interventions assigned to the current technician
+  const fetchInterventions = useCallback(async () => {
+    if (!currentUser?._id) {
+      setError('User not logged in');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await axios.get(`/api/interventions/tech?technician=${currentUser._id}`);
+      setInterventions(response.data.data || []);
+      setError(null);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to fetch interventions');
+      setInterventions([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [currentUser]);
+
   useEffect(() => {
-    const fetchInterventions = async () => {
-      if (!currentUser?._id) {
-        setError('User not logged in');
-        setLoading(false);
-        return;
-      }
-      
-      try {
-        setLoading(true);
-        const response = await axios.get(`/api/interventions/tech?technician=${currentUser._id}`);
-        setInterventions(response.data.data);
-        setError(null);
-      } catch (err) {
-        setError(err.response?.data?.message || 'Failed to fetch interventions');
-        setInterventions([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchInterventions();
-
     return () => {
-      // Cancel any ongoing requests or timers if needed
+      // No async cancellation needed, but included for clarity
     };
-  }, [currentUser?._id, currentUser?.isActive]);
+  }, [fetchInterventions]);
 
+  // Format date for display
   const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
     const options = { year: 'numeric', month: 'short', day: 'numeric' };
     return new Date(dateString).toLocaleDateString(undefined, options);
   };
 
+  // Format time slot (e.g., "09:00 - 17:00")
   const formatTimeSlot = (timeSlot) => {
-    return `${timeSlot.start} - ${timeSlot.end}`;
+    return timeSlot?.start && timeSlot?.end ? `${timeSlot.start} - ${timeSlot.end}` : 'N/A';
   };
 
+  // Get color classes for status
   const getStatusColor = (status) => {
-    switch (status.toLowerCase()) {
+    switch (status?.toLowerCase()) {
       case 'completed':
         return 'bg-green-100 text-green-800';
       case 'in-progress':
@@ -67,13 +71,16 @@ const InterventionsTech = () => {
         return 'bg-purple-100 text-purple-800';
       case 'cancelled':
         return 'bg-red-100 text-red-800';
+      case 'overdue':
+        return 'bg-red-100 text-red-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
   };
 
+  // Get color classes for priority
   const getPriorityColor = (priority) => {
-    switch (priority.toLowerCase()) {
+    switch (priority?.toLowerCase()) {
       case 'high':
         return 'bg-red-100 text-red-800';
       case 'medium':
@@ -85,21 +92,26 @@ const InterventionsTech = () => {
     }
   };
 
+  // Check if an intervention is overdue
   const isInterventionOverdue = (intervention) => {
-    if (intervention.status.toLowerCase() === 'completed' || intervention.status.toLowerCase() === 'cancelled') return false;
+    if (!intervention?.plannedDate || ['completed', 'cancelled'].includes(intervention.status.toLowerCase())) {
+      return false;
+    }
     const plannedDate = new Date(intervention.plannedDate);
-    const today = new Date();
-    return plannedDate < today.setHours(0, 0, 0, 0);
+    const today = new Date('2025-05-31T00:00:00+01:00'); // May 31, 2025, 00:00 CET
+    return plannedDate < today;
   };
 
+  // Handle clicking the "Resolve" button
   const handleResolveClick = (intervention) => {
-    if (!currentUser?.isActive) return;
+    if (!currentUser?.isActive || isInterventionOverdue(intervention)) return;
     setSelectedIntervention(intervention);
     setResolutionNotes('');
     setValidatedBy(currentUser?.name || '');
     setShowResolveModal(true);
   };
 
+  // Handle clicking the "View Details" button
   const handleViewDetailsClick = async (intervention) => {
     if (!currentUser?.isActive) return;
     try {
@@ -115,16 +127,15 @@ const InterventionsTech = () => {
     }
   };
 
+  // Handle clicking the "Start" button
   const handleStartClick = async (intervention) => {
-    if (!currentUser?.isActive) return;
+    if (!currentUser?.isActive || isInterventionOverdue(intervention)) return;
     try {
       const response = await axios.put(`/api/interventions/${intervention._id}`, {
-        status: 'in-progress'
+        status: 'in-progress',
       });
       setInterventions((prev) =>
-        prev.map((int) =>
-          int._id === intervention._id ? response.data.data : int
-        )
+        prev.map((int) => (int._id === intervention._id ? response.data.data : int))
       );
       setError(null);
     } catch (err) {
@@ -132,6 +143,7 @@ const InterventionsTech = () => {
     }
   };
 
+  // Handle submission of the resolve form
   const handleResolveSubmit = async (e) => {
     e.preventDefault();
     if (!currentUser?.isActive) {
@@ -148,11 +160,8 @@ const InterventionsTech = () => {
         resolutionNotes,
         validatedBy,
       });
-
       setInterventions((prev) =>
-        prev.map((int) =>
-          int._id === selectedIntervention._id ? response.data.data : int
-        )
+        prev.map((int) => (int._id === selectedIntervention._id ? response.data.data : int))
       );
       setShowResolveModal(false);
       setError(null);
@@ -161,6 +170,7 @@ const InterventionsTech = () => {
     }
   };
 
+  // Close the resolve modal
   const closeResolveModal = () => {
     setShowResolveModal(false);
     setSelectedIntervention(null);
@@ -169,6 +179,7 @@ const InterventionsTech = () => {
     setError(null);
   };
 
+  // Close the details modal
   const closeDetailsModal = () => {
     setShowDetailsModal(false);
     setInterventionDetails(null);
@@ -186,7 +197,7 @@ const InterventionsTech = () => {
   return (
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold text-gray-800 mb-6">My Interventions</h1>
-      
+
       {!currentUser?.isActive && (
         <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-6">
           <p>Your account is inactive. You can view interventions but cannot perform actions.</p>
@@ -207,11 +218,15 @@ const InterventionsTech = () => {
           </div>
           <div className="stat-title text-gray-600">Completed</div>
           <div className="stat-value text-green-500">
-            {interventions.filter(i => i.status.toLowerCase() === 'completed').length}
+            {interventions.filter((i) => i.status.toLowerCase() === 'completed').length}
           </div>
           <div className="stat-desc text-gray-600">
             {interventions.length > 0
-              ? `${Math.round((interventions.filter(i => i.status.toLowerCase() === 'completed').length / interventions.length) * 100)}% of total`
+              ? `${Math.round(
+                  (interventions.filter((i) => i.status.toLowerCase() === 'completed').length /
+                    interventions.length) *
+                    100
+                )}% of total`
               : '0% of total'}
           </div>
         </div>
@@ -222,10 +237,11 @@ const InterventionsTech = () => {
           </div>
           <div className="stat-title text-gray-600">In Progress</div>
           <div className="stat-value text-blue-500">
-            {interventions.filter(i => i.status.toLowerCase() === 'in-progress').length}
+            {interventions.filter((i) => i.status.toLowerCase() === 'in-progress').length}
           </div>
           <div className="stat-desc text-gray-600">
-            {interventions.filter(i => i.status.toLowerCase() === 'in-progress' && isInterventionOverdue(i)).length} overdue
+            {interventions.filter((i) => i.status.toLowerCase() === 'in-progress' && isInterventionOverdue(i)).length}{' '}
+            overdue
           </div>
         </div>
 
@@ -235,10 +251,10 @@ const InterventionsTech = () => {
           </div>
           <div className="stat-title text-gray-600">Planned</div>
           <div className="stat-value text-purple-500">
-            {interventions.filter(i => i.status.toLowerCase() === 'planned').length}
+            {interventions.filter((i) => i.status.toLowerCase() === 'planned').length}
           </div>
           <div className="stat-desc text-gray-600">
-            {interventions.filter(i => i.status.toLowerCase() === 'planned' && isInterventionOverdue(i)).length} overdue
+            {interventions.filter((i) => i.status.toLowerCase() === 'planned' && isInterventionOverdue(i)).length} overdue
           </div>
         </div>
       </div>
@@ -253,92 +269,133 @@ const InterventionsTech = () => {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Site ID</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Planned Date</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time Slot</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created By</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created At</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Site ID
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Description
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Planned Date
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Time Slot
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Priority
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Created By
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Created At
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {interventions.map((intervention) => (
-                  <tr key={intervention._id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{intervention.siteId}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm text-gray-500 max-w-xs">{intervention.description}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatDate(intervention.plannedDate)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatTimeSlot(intervention.timeSlot)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getPriorityColor(intervention.priority)}`}>
-                        {intervention.priority}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(intervention.status)}`}>
-                        {intervention.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-500">{intervention.createdBy?.name || 'N/A'}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatDate(intervention.createdAt)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap flex space-x-2">
-                      <button
-                        onClick={() => handleViewDetailsClick(intervention)}
-                        className={`px-3 py-1 rounded text-sm ${
-                          currentUser?.isActive
-                            ? 'bg-blue-500 text-white hover:bg-blue-600'
-                            : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                        }`}
-                        disabled={!currentUser?.isActive}
-                        aria-label={`View details for intervention ${intervention._id}`}
-                      >
-                        View Details
-                      </button>
-                      {intervention.status.toLowerCase() === 'planned' && (
+                {interventions.map((intervention) => {
+                  const overdue = isInterventionOverdue(intervention);
+                  return (
+                    <tr
+                      key={intervention._id}
+                      className={`hover:bg-gray-50 ${overdue ? 'bg-red-100/50' : ''}`}
+                    >
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">{intervention.siteId || 'N/A'}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div
+                          className="text-sm text-gray-500 max-w-[150px] overflow-hidden text-ellipsis whitespace-nowrap"
+                          title={intervention.description || 'No description provided'}
+                        >
+                          {intervention.description
+                            ? intervention.description.length > 25
+                              ? `${intervention.description.substring(0, 25)}...`
+                              : intervention.description
+                            : 'No description provided'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {formatDate(intervention.plannedDate)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {formatTimeSlot(intervention.timeSlot)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span
+                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getPriorityColor(
+                            intervention.priority
+                          )}`}
+                        >
+                          {intervention.priority || 'N/A'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span
+                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(
+                            overdue ? 'overdue' : intervention.status
+                          )}`}
+                        >
+                          {overdue ? 'Overdue' : intervention.status || 'N/A'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-500">{intervention.createdBy?.name || 'N/A'}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {formatDate(intervention.createdAt)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap flex space-x-2">
                         <button
-                          onClick={() => handleStartClick(intervention)}
+                          onClick={() => handleViewDetailsClick(intervention)}
                           className={`px-3 py-1 rounded text-sm ${
                             currentUser?.isActive
-                              ? 'bg-yellow-500 text-white hover:bg-yellow-600'
+                              ? 'bg-blue-500 text-white hover:bg-blue-600'
                               : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                           }`}
                           disabled={!currentUser?.isActive}
-                          aria-label={`Start intervention ${intervention._id}`}
+                          aria-label={`View details for intervention ${intervention._id}`}
                         >
-                          Start
+                          View Details
                         </button>
-                      )}
-                      {intervention.status.toLowerCase() !== 'completed' && (
-                        <button
-                          onClick={() => handleResolveClick(intervention)}
-                          className={`px-3 py-1 rounded text-sm ${
-                            currentUser?.isActive
-                              ? 'bg-green-500 text-white hover:bg-green-600'
-                              : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                          }`}
-                          disabled={!currentUser?.isActive}
-                          aria-label={`Resolve intervention ${intervention._id}`}
-                        >
-                          Resolve
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                        {intervention.status.toLowerCase() === 'planned' && (
+                          <button
+                            onClick={() => handleStartClick(intervention)}
+                            className={`px-3 py-1 rounded text-sm ${
+                              currentUser?.isActive && !overdue
+                                ? 'bg-yellow-500 text-white hover:bg-yellow-600'
+                                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            }`}
+                            disabled={!currentUser?.isActive || overdue}
+                            aria-label={`Start intervention ${intervention._id}`}
+                          >
+                            Start
+                          </button>
+                        )}
+                        {intervention.status.toLowerCase() !== 'completed' && (
+                          <button
+                            onClick={() => handleResolveClick(intervention)}
+                            className={`px-3 py-1 rounded text-sm ${
+                              currentUser?.isActive && !overdue
+                                ? 'bg-green-500 text-white hover:bg-green-600'
+                                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            }`}
+                            disabled={!currentUser?.isActive || overdue}
+                            aria-label={`Resolve intervention ${intervention._id}`}
+                          >
+                            Resolve
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -368,7 +425,7 @@ const InterventionsTech = () => {
                   value={resolutionNotes}
                   onChange={(e) => setResolutionNotes(e.target.value)}
                   className="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
-                  rows="4"
+                  rows={4}
                   required
                   aria-required="true"
                 />
@@ -426,11 +483,11 @@ const InterventionsTech = () => {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700">Site ID</label>
-                <p className="text-sm text-gray-500">{interventionDetails.siteId}</p>
+                <p className="text-sm text-gray-500">{interventionDetails.siteId || 'N/A'}</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Description</label>
-                <p className="text-sm text-gray-500">{interventionDetails.description}</p>
+                <p className="text-sm text-gray-500">{interventionDetails.description || 'No description provided'}</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Planned Date</label>
@@ -442,14 +499,22 @@ const InterventionsTech = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Priority</label>
-                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getPriorityColor(interventionDetails.priority)}`}>
-                  {interventionDetails.priority}
+                <span
+                  className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getPriorityColor(
+                    interventionDetails.priority
+                  )}`}
+                >
+                  {interventionDetails.priority || 'N/A'}
                 </span>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Status</label>
-                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(interventionDetails.status)}`}>
-                  {interventionDetails.status}
+                <span
+                  className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(
+                    isInterventionOverdue(interventionDetails) ? 'overdue' : interventionDetails.status
+                  )}`}
+                >
+                  {isInterventionOverdue(interventionDetails) ? 'Overdue' : interventionDetails.status || 'N/A'}
                 </span>
               </div>
               <div>
@@ -492,6 +557,10 @@ const InterventionsTech = () => {
       )}
     </div>
   );
+};
+
+InterventionsTech.propTypes = {
+  // No props are passed to this component, but included for consistency
 };
 
 export default InterventionsTech;
