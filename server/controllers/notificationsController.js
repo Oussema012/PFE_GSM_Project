@@ -12,128 +12,132 @@ const transporter = nodemailer.createTransport({
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
-  tls: {
-    rejectUnauthorized: false,
-  },
+  tls: { rejectUnauthorized: false },
 });
 
-// Send email notification
-const sendEmailNotification = async (email, subject, message) => {
-  const mailOptions = {
-    from: process.env.EMAIL_USER,
-    to: email,
-    subject,
-    text: message,
-  };
-
-  try {
-    await transporter.sendMail(mailOptions);
-    console.log(`Email sent successfully to ${email}`);
-    return true;
-  } catch (error) {
-    console.error('Email sending error:', error.message);
-    return false;
+// Send email notification with retry mechanism
+const sendEmailNotification = async (email, subject, message, retries = 3) => {
+  const mailOptions = { from: process.env.EMAIL_USER, to: email, subject, text: message };
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      await transporter.sendMail(mailOptions);
+      return true;
+    } catch (error) {
+      if (attempt === retries) {
+        return false; // Silent failure
+      }
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
   }
 };
 
 // Check for upcoming and overdue maintenance notifications
-const checkMaintenanceNotifications = async () => {
+const checkMaintenanceNotifications = async (io) => {
+  let newNotifications = 0;
   try {
-    const now = new Date();
-    const inThreeDays = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+    const now = moment().tz('Europe/Paris').toDate();
+    const inThreeDays = moment(now).tz('Europe/Paris').add(3, 'days').toDate();
+    const oneDayAgo = moment(now).tz('Europe/Paris').subtract(24, 'hours').toDate();
 
     // Find maintenances within 3 days or overdue
-    const maintenances = await Maintenance.find()
+    const maintenances = await Maintenance.find({
+      $or: [
+        { performedAt: { $lte: inThreeDays, $gte: now }, status: { $in: ['planned', null] } }, // Upcoming
+        { performedAt: { $lt: now }, status: { $nin: ['completed', 'cancelled'] } }, // Overdue
+      ],
+    })
       .populate('equipmentId', 'name')
+      .populate('performedBy', 'name email')
       .sort({ performedAt: 1 });
 
     for (const maintenance of maintenances) {
       // Validate required fields
-      if (!maintenance.equipmentId || !maintenance.performedAt) {
-        console.warn(`Skipping maintenance ID ${maintenance._id}: Missing equipmentId or performedAt`);
+      if (
+        !maintenance.equipmentId ||
+        !maintenance.performedAt ||
+        !mongoose.Types.ObjectId.isValid(maintenance.equipmentId) ||
+        !maintenance.performedBy ||
+        !maintenance.performedBy.email
+      ) {
+        continue; // Silent skip
+      }
+
+      const performedAt = moment(maintenance.performedAt).tz('Europe/Paris');
+      const isOverdue = performedAt.toDate() < now && maintenance.status !== 'completed';
+      const notificationType = isOverdue ? 'overdue' : 'upcoming';
+      const equipmentName = maintenance.equipmentId.name || 'Unknown Equipment';
+      const technicianName = maintenance.performedBy.name || 'Unknown Technician';
+      const technicianEmail = maintenance.performedBy.email;
+      const message = isOverdue
+        ? `⚠️ Maintenance for ${equipmentName} (Technician: ${technicianName}) is overdue since ${performedAt.format('YYYY-MM-DD HH:mm')}.`
+        : `⏰ Reminder: Maintenance for ${equipmentName} (Technician: ${technicianName}) is scheduled on ${performedAt.format('YYYY-MM-DD HH:mm')}.`;
+
+      // Check for existing notification (within 24 hours for overdue)
+      const existingNotification = await Notification.findOne({
+        maintenanceId: maintenance._id,
+        type: notificationType,
+        createdAt: isOverdue ? { $gte: oneDayAgo } : { $exists: true },
+      });
+
+      if (existingNotification) {
+        console.log(`Notification already exists for maintenance ${maintenance._id} (${notificationType})`);
         continue;
       }
-      if (!mongoose.Types.ObjectId.isValid(maintenance.equipmentId)) {
-        console.warn(`Skipping maintenance ID ${maintenance._id}: Invalid equipmentId`);
-        continue;
-      }
 
-      const performedAt = new Date(maintenance.performedAt);
-      const timeDifference = performedAt - now;
-      const equipmentName = maintenance.equipmentId?.name || 'Unknown Equipment';
+      const notification = new Notification({
+        maintenanceId: maintenance._id,
+        equipmentId: maintenance.equipmentId,
+        type: notificationType,
+        scheduledDate: maintenance.performedAt,
+        sent: false,
+        emailTo: technicianEmail,
+        message,
+        date: new Date(),
+        read: false,
+        readAt: null,
+        createdAt: new Date(),
+      });
 
-      // Check for upcoming maintenance (within 3 days)
-      if (timeDifference <= 3 * 24 * 60 * 60 * 1000 && timeDifference > 0) {
-        const message = `Maintenance for ${equipmentName} (Technician: ${maintenance.performedBy}) is scheduled on ${moment(performedAt).tz('Europe/Paris').format('YYYY-MM-DD HH:mm')}.`;
-        await createNotification(maintenance, 'upcoming', message);
-      }
+      await notification.save();
+      newNotifications++;
 
-      // Check for overdue maintenance
-      if (timeDifference < 0 && maintenance.status !== 'completed') {
-        const message = `Maintenance for ${equipmentName} (Technician: ${maintenance.performedBy}) is overdue since ${moment(performedAt).tz('Europe/Paris').format('YYYY-MM-DD HH:mm')}.`;
-        await createNotification(maintenance, 'overdue', message);
+      const emailSent = await sendEmailNotification(
+        notification.emailTo,
+        `Maintenance Alert: ${notificationType.charAt(0).toUpperCase() + notificationType.slice(1)}`,
+        message
+      );
+
+      if (emailSent) {
+        notification.sent = true;
+        await notification.save();
       }
     }
   } catch (err) {
-    console.error('Error checking maintenance notifications:', err.message);
+    // Silent error handling
   }
+  return newNotifications;
 };
 
-// Helper function to create notification
-const createNotification = async (maintenance, type, message) => {
-  try {
-    const existingNotification = await Notification.findOne({
-      maintenanceId: maintenance._id,
-      type,
-    });
+// Continuous notification check with retry
+const checkAndCreateNotifications = async (io) => {
+  const check = async () => {
+    let totalNewNotifications = 0;
+    try {
+      totalNewNotifications += await checkMaintenanceNotifications(io);
 
-    if (existingNotification) {
-      console.log(`Notification already exists for maintenance ${maintenance._id} (${type})`);
-      return;
+      if (totalNewNotifications > 0) {
+        const notifications = await Notification.find({ read: false }).limit(10);
+        io.emit('new-notifications', { notifications, total: notifications.length });
+      }
+
+      setTimeout(check, totalNewNotifications > 0 ? 300000 : 60000);
+    } catch (error) {
+      setTimeout(check, 60000); // Retry after 60 seconds on error
     }
-
-    const notification = new Notification({
-      maintenanceId: maintenance._id,
-      equipmentId: maintenance.equipmentId,
-      type,
-      scheduledDate: maintenance.performedAt, // Use performedAt for precision
-      sent: false,
-      emailTo: process.env.TEST_EMAIL || process.env.EMAIL_USER,
-      message,
-      date: new Date(),
-      read: false,
-      readAt: null,
-      createdAt: new Date(),
-    });
-
-    await notification.save();
-    console.log(`Notification created: ${notification._id} (${type})`);
-
-    const emailSent = await sendEmailNotification(
-      notification.emailTo,
-      `Maintenance Alert: ${type.charAt(0).toUpperCase() + type.slice(1)}`,
-      message
-    );
-
-    if (emailSent) {
-      notification.sent = true;
-      await notification.save();
-      console.log(`Email sent for notification ${notification._id}`);
-    }
-  } catch (error) {
-    console.error(`Error creating notification for maintenance ${maintenance._id}:`, error.message);
-  }
+  };
+  check();
 };
 
-// Check and create notifications (for startup or manual trigger)
-const checkAndCreateNotifications = async () => {
-  try {
-    console.log('Running startup maintenance notification check...');
-    await checkMaintenanceNotifications();
-  } catch (error) {
-    console.error('Error in checkAndCreateNotifications:', error.message);
-  }
-};
 // Get all notifications
 const getNotifications = async (req, res) => {
   try {
@@ -170,7 +174,6 @@ const getNotifications = async (req, res) => {
       totalPages: Math.ceil(totalNotifications / limit),
     });
   } catch (error) {
-    console.error('Error fetching notifications:', error.message);
     res.status(500).json({ message: 'Error fetching notifications', error: error.message });
   }
 };
@@ -191,7 +194,6 @@ const markNotificationAsRead = async (req, res) => {
 
     res.status(200).json({ message: 'Notification marked as read', notification });
   } catch (error) {
-    console.error('Error marking notification as read:', error.message);
     res.status(500).json({ message: 'Error marking notification as read', error: error.message });
   }
 };
@@ -208,7 +210,6 @@ const deleteNotification = async (req, res) => {
 
     res.status(200).json({ message: 'Notification deleted successfully' });
   } catch (error) {
-    console.error('Error deleting notification:', error.message);
     res.status(500).json({ message: 'Error deleting notification', error: error.message });
   }
 };
@@ -217,4 +218,6 @@ module.exports = {
   checkMaintenanceNotifications,
   checkAndCreateNotifications,
   getNotifications,
+  markNotificationAsRead,
+  deleteNotification,
 };

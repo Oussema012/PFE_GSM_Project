@@ -48,11 +48,14 @@ const DashNotifications = () => {
     const fetchSiteReferences = async () => {
       try {
         const response = await axios.get('/api/sites/references');
-        setSiteReferences(response.data);
+        // Normalize to array of strings for consistency
+        const references = Array.isArray(response.data)
+          ? response.data.map((site) => site.site_reference).filter(Boolean)
+          : [];
+        setSiteReferences(references);
       } catch (error) {
-        console.error('Failed to fetch site references:', error);
+        console.error('Failed to fetch site references:', error.response?.data || error.message);
         setError('Failed to fetch site references. Using fallback options.');
-        // Fallback to known site references
         setSiteReferences(['SITE001', 'SITE002']);
       }
     };

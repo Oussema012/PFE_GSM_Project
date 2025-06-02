@@ -18,45 +18,76 @@ const NetworkDeviceManagement = () => {
   }, []);
 
   // Fetch sites and their equipment
-  const fetchSites = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const response = await axios.get('/api/sites');
-      const normalizedSites = response.data.map((site) => ({
+const fetchSites = async () => {
+  setLoading(true);
+  setError('');
+  try {
+    const response = await axios.get('/api/sites?_=' + new Date().getTime()); // Cache-busting
+    console.log('Raw API Response:', response.data); // Log raw data for debugging
+    const normalizedSites = response.data.map((site) => {
+      const normalized = {
         ...site,
-        location: site.location || { address: '', region: '', lat: 0, lon: 0 },
+        location: {
+          address: site.address || '',
+          region: site.region || '',
+          lat: site.location?.lat || 0,
+          lon: site.location?.lon || 0,
+        },
         technology: Array.isArray(site.technology) ? site.technology : [],
-      }));
-      setSites(normalizedSites);
+        status: site.status || 'unknown',
+        power_status: site.power_status || 'unknown',
+        battery_level: site.battery_level || 0,
+        site_id: site.site_id || '',
+        site_reference: site.site_reference || '',
+        site_type: site.site_type || '',
+        temperature: site.temperature || 0,
+        last_updated: site.last_updated || null,
+        alarms: Array.isArray(site.alarms) ? site.alarms : [],
+        controller_id: site.controller_id || '',
+        vendor: site.vendor || '',
+        ac_status: site.ac_status || '',
+        reference: site.reference || '',
+        created_at: site.created_at || null,
+        equipment_status: site.equipment_status || 'unknown',
+        humidity: site.humidity || 0,
+        last_temperature: site.last_temperature || 0,
+        signal_strength: site.signal_strength || 0,
+        voltage_level: site.voltage_level || 0,
+        ac_on_timestamp: site.ac_on_timestamp || 0,
+      };
+      console.log(`Normalized Site ${site.name}:`, normalized); // Log normalized data
+      return normalized;
+    });
+    setSites(normalizedSites);
 
-      // Fetch equipment for each site
-      const equipmentPromises = normalizedSites.map(async (site) => {
-        if (!isValidObjectId(site._id)) {
-          console.warn(`Invalid site ID format for site ${site.name}: ${site._id}`);
-          return { siteId: site._id, equipment: [] };
-        }
-        try {
-          const equipmentResponse = await axios.get(`http://localhost:3000/api/equipment/${site._id}`);
-          return { siteId: site._id, equipment: equipmentResponse.data };
-        } catch (err) {
-          console.error(`Failed to fetch equipment for site ${site._id}:`, err.message);
-          return { siteId: site._id, equipment: [] };
-        }
-      });
+    // Fetch equipment for each site
+    const equipmentPromises = normalizedSites.map(async (site) => {
+      if (!isValidObjectId(site._id)) {
+        console.warn(`Invalid site ID format for site ${site.name}: ${site._id}`);
+        return { siteId: site._id, equipment: [] };
+      }
+      try {
+        const equipmentResponse = await axios.get(`http://localhost:3000/api/equipment/${site._id}`);
+        return { siteId: site._id, equipment: equipmentResponse.data };
+      } catch (err) {
+        console.error(`Failed to fetch equipment for site ${site._id}:`, err.message);
+        return { siteId: site._id, equipment: [] };
+      }
+    });
 
-      const equipmentResults = await Promise.all(equipmentPromises);
-      const equipmentMap = equipmentResults.reduce((acc, { siteId, equipment }) => {
-        acc[siteId] = equipment;
-        return acc;
-      }, {});
-      setEquipmentData(equipmentMap);
-    } catch (error) {
-      setError(`Failed to fetch sites: ${error.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
+    const equipmentResults = await Promise.all(equipmentPromises);
+    const equipmentMap = equipmentResults.reduce((acc, { siteId, equipment }) => {
+      acc[siteId] = equipment;
+      return acc;
+    }, {});
+    setEquipmentData(equipmentMap);
+  } catch (error) {
+    setError(`Failed to fetch sites: ${error.message}`);
+    console.error('Fetch Sites Error:', error);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleView = (site) => {
     setCurrentSite(site);
