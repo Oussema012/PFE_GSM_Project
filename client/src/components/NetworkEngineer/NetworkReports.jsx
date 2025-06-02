@@ -39,7 +39,7 @@ const NetworkReports = () => {
   const [loading, setLoading] = useState(false);
 
   const currentUser = useSelector((state) => state.user?.currentUser);
-  const API_URL = 'http://localhost:3000/api';
+  const API_URL = 'http://localhost:8000/api';
 
   useEffect(() => {
     if (!currentUser) {

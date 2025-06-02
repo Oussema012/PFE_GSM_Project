@@ -4,7 +4,7 @@ import { FaBell, FaWrench, FaNetworkWired, FaUsers, FaExclamationTriangle } from
 import { Link } from 'react-router-dom';
 
 // Set axios base URL
-axios.defaults.baseURL = 'http://localhost:3000';
+axios.defaults.baseURL = 'http://localhost:000';
 
 // Validate MongoDB ObjectId
 const isValidObjectId = (id) => /^[0-9a-fA-F]{24}$/.test(id);

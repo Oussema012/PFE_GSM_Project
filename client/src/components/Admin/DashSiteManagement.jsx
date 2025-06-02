@@ -22,7 +22,7 @@ const DashSiteManagement = () => {
     setLoading(true);
     setError('');
     try {
-      const response = await axios.get('http://localhost:3000/api/sites');
+      const response = await axios.get('http://localhost:8000/api/sites');
       const normalizedSites = response.data.map((site) => ({
         ...site,
         location: site.location || { address: '', region: '', lat: 0, lon: 0 },
@@ -37,7 +37,7 @@ const DashSiteManagement = () => {
           return { siteId: site._id, equipment: [] };
         }
         try {
-          const equipmentResponse = await axios.get(`http://localhost:3000/api/equipment/${site._id}`);
+          const equipmentResponse = await axios.get(`http://localhost:8000/api/equipment/${site._id}`);
           return { siteId: site._id, equipment: equipmentResponse.data };
         } catch (err) {
           console.error(`Failed to fetch equipment for site ${site._id}:`, err.message);
@@ -66,7 +66,7 @@ const DashSiteManagement = () => {
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this site?')) {
       try {
-        await axios.delete(`http://localhost:3000/api/sites/${id}`);
+        await axios.delete(`http://localhost:8000/api/sites/${id}`);
         alert('Site deleted successfully');
         fetchSites();
       } catch (error) {

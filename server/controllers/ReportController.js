@@ -6,7 +6,7 @@ const { generateStatsCharts } = require('./chartGeneration');
 const Report = require('../models/Report');
 const axios = require('axios'); // Ensure axios is installed
 
-const API_BASE_URL = 'http://localhost:3000'; // Match your API base URL
+const API_BASE_URL = 'http://localhost:8000'; // Match your API base URL
 
 exports.generateReport = async (req, res) => {
   try {

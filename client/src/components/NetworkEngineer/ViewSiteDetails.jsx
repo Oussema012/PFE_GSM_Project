@@ -41,7 +41,7 @@ const ViewSiteDetails = ({ isOpen, onClose, site }) => {
         setError('Invalid site ID format for fetching equipment.');
         return;
       }
-      const response = await axios.get(`http://localhost:3000/api/equipment/${siteId}`);
+      const response = await axios.get(`http://localhost:8000/api/equipment/${siteId}`);
       setEquipmentList(response.data);
     } catch (err) {
       if (err.response?.status === 404) {
@@ -61,7 +61,7 @@ const fetchEquipmentOptions = async () => {
   setLoadingOptions(true);
   setError('');
   try {
-    const response = await axios.get('http://localhost:3000/api/equipment/options');
+    const response = await axios.get('http://localhost:8000/api/equipment/options');
     console.log('Equipment Options Response:', response.data);
     if (response.data.length === 0) {
       console.log('API returned empty array, using fallback');
@@ -131,7 +131,7 @@ const fetchEquipmentOptions = async () => {
         setError('Status must be one of: operational, faulty, maintenance.');
         return;
       }
-      const response = await axios.post('http://localhost:3000/api/equipment', equipmentFormData);
+      const response = await axios.post('http://localhost:8000/api/equipment', equipmentFormData);
       setEquipmentList([...equipmentList, response.data]);
       setSuccessMessage('Equipment added successfully');
       setTimeout(() => setSuccessMessage(''), 3000);
@@ -171,7 +171,7 @@ const fetchEquipmentOptions = async () => {
         setError('Status must be one of: operational, faulty, maintenance.');
         return;
       }
-      const response = await axios.put(`http://localhost:3000/api/equipment/${showEditEquipmentModal}`, equipmentFormData);
+      const response = await axios.put(`http://localhost:8000/api/equipment/${showEditEquipmentModal}`, equipmentFormData);
       setEquipmentList(equipmentList.map((eq) => (eq._id === showEditEquipmentModal ? response.data : eq)));
       setSuccessMessage('Equipment updated successfully');
       setTimeout(() => setSuccessMessage(''), 3000);
@@ -194,7 +194,7 @@ const fetchEquipmentOptions = async () => {
     setError('');
     setSuccessMessage('');
     try {
-      await axios.delete(`http://localhost:3000/api/equipment/${showDeleteEquipmentModal}`);
+      await axios.delete(`http://localhost:8000/api/equipment/${showDeleteEquipmentModal}`);
       setEquipmentList(equipmentList.filter((eq) => eq._id !== showDeleteEquipmentModal));
       setSuccessMessage('Equipment deleted successfully');
       setTimeout(() => setSuccessMessage(''), 3000);

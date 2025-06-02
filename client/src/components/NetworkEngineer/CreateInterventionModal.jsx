@@ -27,7 +27,7 @@ const CreateInterventionModal = ({ onClose, onSubmit, isScheduling = false, init
       try {
         setLoading(true);
         setError(null); // Reset error before new request
-        const response = await fetch('http://localhost:3000/api/technicians');
+        const response = await fetch('http://localhost:8000/api/technicians');
         const data = await response.json();
 
         if (response.ok && data.success) {

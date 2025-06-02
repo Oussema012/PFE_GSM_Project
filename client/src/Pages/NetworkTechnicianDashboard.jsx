@@ -50,7 +50,7 @@ const NetworkTechnicianDashboard = () => {
     const fetchNotificationCounts = async () => {
       try {
         // Fetch maintenance notifications
-        const maintenanceResponse = await axios.get('http://localhost:3000/api/notifications', {
+        const maintenanceResponse = await axios.get('http://localhost:8000/api/notifications', {
           params: {
             notificationCategory: 'maintenance',
             read: 'false',
@@ -58,7 +58,7 @@ const NetworkTechnicianDashboard = () => {
           },
         });
         // Fetch intervention notifications
-        const interventionResponse = await axios.get('http://localhost:3000/api/notifications', {
+        const interventionResponse = await axios.get('http://localhost:8000/api/notifications', {
           params: {
             notificationCategory: 'intervention',
             read: 'false',
@@ -98,7 +98,7 @@ const NetworkTechnicianDashboard = () => {
 
   const handleSignOut = async () => {
     try {
-      await axios.post('http://localhost:3000/signout');
+      await axios.post('http://localhost:8000/signout');
       dispatch(signoutSuccess());
       navigate('/signin');
     } catch (error) {

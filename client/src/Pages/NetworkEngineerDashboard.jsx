@@ -34,7 +34,7 @@ const NotificationDropdown = ({ onClose }) => {
   const fetchNotifications = async () => {
     setLoading(true);
     try {
-      const response = await axios.get('http://localhost:3000/api/notifications', {
+      const response = await axios.get('http://localhost:8000/api/notifications', {
         params: { limit: 10, read: 'false' }
       });
       setNotifications(response.data.notifications);
@@ -50,7 +50,7 @@ const NotificationDropdown = ({ onClose }) => {
 
   const checkNotifications = async () => {
     try {
-      await axios.post('http://localhost:3000/api/notifications/check');
+      await axios.post('http://localhost:8000/api/notifications/check');
       fetchNotifications();
     } catch (err) {
       setError('Failed to check notifications');
@@ -60,7 +60,7 @@ const NotificationDropdown = ({ onClose }) => {
 
   const markAsRead = async (id) => {
     try {
-      await axios.put(`http://localhost:3000/api/notifications/${id}/read`);
+      await axios.put(`http://localhost:8000/api/notifications/${id}/read`);
       setNotifications(notifications.map(n => n._id === id ? { ...n, read: true, readAt: new Date() } : n));
       setUnreadCount(unreadCount - 1);
     } catch (err) {
@@ -71,7 +71,7 @@ const NotificationDropdown = ({ onClose }) => {
 
   const deleteNotification = async (id) => {
     try {
-      await axios.delete(`http://localhost:3000/api/notifications/${id}`);
+      await axios.delete(`http://localhost:8000/api/notifications/${id}`);
       setNotifications(notifications.filter(n => n._id !== id));
       if (!notifications.find(n => n._id === id).read) {
         setUnreadCount(unreadCount - 1);
@@ -189,7 +189,7 @@ const NetworkEngineerDashboard = () => {
   useEffect(() => {
     const fetchUnreadCount = async () => {
       try {
-        const response = await axios.get('http://localhost:3000/api/notifications', {
+        const response = await axios.get('http://localhost:8000/api/notifications', {
           params: { read: 'false', limit: 10 }
         });
         setUnreadCount(response.data.total);
@@ -214,7 +214,7 @@ const NetworkEngineerDashboard = () => {
 
   const handleSignOut = async () => {
     try {
-      await axios.post('http://localhost:3000/signout');
+      await axios.post('http://localhost:8000/signout');
       dispatch(signoutSuccess());
       navigate('/signin');
     } catch (error) {

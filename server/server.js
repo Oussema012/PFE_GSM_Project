@@ -35,6 +35,11 @@ try {
   console.error('Error during maintenance check on startup:', error);
 }
 
+try {
+  checkMaintenanceNotifications();
+} catch (error) {
+  console.error('Error during maintenance check on startup:', error);
+}
 // ========== API Routes ==========
 
 app.use('/api/sites', siteRoutes);
@@ -89,7 +94,7 @@ app.get('/', (req, res) => {
 
 
 // ========== Start Server ==========
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8000;
 const server = app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
 });

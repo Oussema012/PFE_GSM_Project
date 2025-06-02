@@ -38,7 +38,7 @@ const DashUserManagement = () => {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [loading, setLoading] = useState(false);
 
-  const API_URL = 'http://localhost:3000/api';
+  const API_URL = 'http://localhost:8000/api';
 
   useEffect(() => {
     fetchUsers();

@@ -10,7 +10,7 @@ import { FaWrench } from 'react-icons/fa';
 import moment from 'moment-timezone';
 
 // Set axios base URL
-axios.defaults.baseURL = 'http://localhost:3000';
+axios.defaults.baseURL = 'http://localhost:8000';
 
 const DashMapSites = () => {
   const [maintenances, setMaintenances] = useState([]);

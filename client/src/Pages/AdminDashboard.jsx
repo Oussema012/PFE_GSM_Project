@@ -36,7 +36,7 @@ const AdminNotificationDropdown = ({ onClose }) => {
           onClick={() => {
             // Trigger a refresh by calling the API directly
             axios
-              .post("http://localhost:3000/api/notifications/check")
+              .post("http://localhost:8000/api/notifications/check")
               .then(() => {
                 // Assuming DashNotif will handle its own refresh
               })
@@ -76,7 +76,7 @@ const AdminDashboard = () => {
   // Fetch unread notifications count
   const fetchUnreadNotifications = async () => {
     try {
-      const response = await axios.get("http://localhost:3000/api/notifications", {
+      const response = await axios.get("http://localhost:8000/api/notifications", {
         params: { read: false, limit: 10 },
       });
       setUnreadCount(response.data.total || 0);
@@ -117,7 +117,7 @@ const AdminDashboard = () => {
   // Handle sign out
   const signOut = async () => {
     try {
-      await axios.post("http://localhost:3000/signout");
+      await axios.post("http://localhost:8000/signout");
       dispatch(signoutSuccess());
       navigate("/signin");
     } catch (error) {

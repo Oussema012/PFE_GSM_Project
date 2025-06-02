@@ -41,7 +41,7 @@ const NetworkAlerts = () => {
   const [resolving, setResolving] = useState(null);
   const [siteReferences, setSiteReferences] = useState([]);
 
-  axios.defaults.baseURL = 'http://localhost:3000';
+  axios.defaults.baseURL = 'http://localhost:8000';
 
   // Fetch site references for dropdown
 useEffect(() => {

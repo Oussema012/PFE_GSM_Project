@@ -20,7 +20,7 @@ const Notifications = () => {
   const fetchNotifications = async () => {
     setLoading(true);
     try {
-      const response = await axios.get('http://localhost:3000/api/notifications', {
+      const response = await axios.get('http://localhost:8000/api/notifications', {
         params: {
           read: filters.read || undefined,
           type: filters.type || undefined,
@@ -43,7 +43,7 @@ const Notifications = () => {
 
   const checkNotifications = async () => {
     try {
-      await axios.post('http://localhost:3000/api/notifications/check');
+      await axios.post('http://localhost:8000/api/notifications/check');
       fetchNotifications();
     } catch (err) {
       setError('Failed to check notifications');
@@ -53,7 +53,7 @@ const Notifications = () => {
 
   const markAsRead = async (id) => {
     try {
-      await axios.put(`http://localhost:3000/api/notifications/${id}/read`);
+      await axios.put(`http://localhost:8000/api/notifications/${id}/read`);
       setNotifications(notifications.map(n => n._id === id ? { ...n, read: true, readAt: new Date() } : n));
     } catch (err) {
       setError('Failed to mark notification as read');
@@ -63,7 +63,7 @@ const Notifications = () => {
 
   const deleteNotification = async (id) => {
     try {
-      await axios.delete(`http://localhost:3000/api/notifications/${id}`);
+      await axios.delete(`http://localhost:8000/api/notifications/${id}`);
       setNotifications(notifications.filter(n => n._id !== id));
       setTotalNotifications(totalNotifications - 1);
       if (notifications.length === 1 && page > 1) {

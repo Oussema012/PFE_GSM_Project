@@ -7,7 +7,7 @@ import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement, 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement, Title, Tooltip, Legend, Filler);
 
 // Configure the backend API base URL
-const API_BASE_URL = 'http://localhost:3000'; // Update to match your backend server URL
+const API_BASE_URL = 'http://localhost:8000'; // Update to match your backend server URL
 
 const DashReport = () => {
   const [sites, setSites] = useState([]);
