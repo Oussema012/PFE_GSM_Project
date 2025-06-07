@@ -2,11 +2,11 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 require('./config/mongoose'); // MongoDB connection setup
-const { checkAndCreateNotifications, checkMaintenanceNotifications } = require('./notificationRules/checkMaintenanceNotifications');
-const { sendEmailNotification } = require('./email');
+const { checkAndCreateNotifications, sendEmailNotification } = require('./notificationRules/checkInterventionNotifications');
+const { scheduleMaintenanceNotifications, checkMaintenanceTasks } = require('./notificationRules/checkMaintenanceNotifications');
 const cron = require('node-cron');
-
 const app = express();
+const jwt = require("jsonwebtoken");
 
 // ========== Middleware ==========
 app.use(cors({
@@ -26,22 +26,42 @@ const reportRoutes = require('./routes/report.routes');
 const maintenanceRoutes = require('./routes/maintenance.routes');
 const mapRoutes = require('./routes/map.routes');
 const notificationRoutes = require('./routes/notifications.routes');
-const userRoutes = require('./routes/user.routes'); // ✅ Correct router import
+const METABASE_SITE_URL = "http://localhost:3000";
+const METABASE_SECRET_KEY = "37771f859fb97b642211be6f567dc8db29813281f4b83e3b91f30179a6f4f696";
 
-// ========== Initial Maintenance Check on Startup ==========
+app.get('/api/metabase-embed-token/:dashboardId', (req, res) => {
+  try {
+    const dashboardId = req.params.dashboardId;
+    const { startDate, endDate } = req.query; // Optional filter parameters
+
+    const payload = {
+      resource: { dashboard: parseInt(dashboardId) },
+      params: {},
+      exp: Math.round(Date.now() / 1000) + (10 * 60) // 10 minute expiration
+    };
+    const token = jwt.sign(payload, METABASE_SECRET_KEY);
+    const embedUrl = `${METABASE_SITE_URL}/embed/dashboard/${token}#bordered=true&titled=true`;
+    res.json({ embedUrl });
+  } catch (error) {
+    console.error('Error generating embed token:', error);
+    res.status(500).json({ success: false, message: 'Failed to generate embed URL' });
+  }
+});
+
+// ========== Initial Notification Checks on Startup ==========
 try {
-  checkAndCreateNotifications();
+  checkAndCreateNotifications(); // Start intervention notification cron
+} catch (error) {
+  console.error('Error during intervention check on startup:', error);
+}
+
+try {
+  scheduleMaintenanceNotifications(); // Start maintenance notification cron
 } catch (error) {
   console.error('Error during maintenance check on startup:', error);
 }
 
-try {
-  checkMaintenanceNotifications();
-} catch (error) {
-  console.error('Error during maintenance check on startup:', error);
-}
 // ========== API Routes ==========
-
 app.use('/api/sites', siteRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/equipment', equipmentRoutes);
@@ -52,12 +72,11 @@ app.use('/api/maintenance', maintenanceRoutes);
 app.use('/api/maps', mapRoutes);
 app.use('/api/notifications', notificationRoutes);
 
-
 // ========== Manual Email Notification Route ==========
 app.post('/send-notification', async (req, res) => {
   const { email, message } = req.body;
   try {
-    await sendEmailNotification(email, message);
+    await sendEmailNotification(email, 'Manual Notification', message);
     res.status(200).send('✅ Email sent successfully');
   } catch (error) {
     console.error(error);
@@ -76,7 +95,7 @@ app.get('/send-test-email', async (req, res) => {
   }
 
   try {
-    await sendEmailNotification(recipient, testMessage);
+    await sendEmailNotification(recipient, 'Test Email', testMessage);
     res.send(`✅ Test email sent successfully to ${recipient}`);
   } catch (err) {
     console.error(err);
@@ -89,16 +108,7 @@ app.get('/', (req, res) => {
   res.send('🚀 GSM Monitoring API is running');
 });
 
-
-
-
-
-// ========== Start Server ==========
-const PORT = process.env.PORT || 8000;
-const server = app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-});
-
+// ========== Error Handling Middleware ==========
 app.use((err, req, res, next) => {
   console.error(err.stack);
   const statusCode = err.statusCode || 500;
@@ -109,6 +119,13 @@ app.use((err, req, res, next) => {
     message
   });
 });
+
+// ========== Start Server ==========
+const PORT = process.env.PORT || 8000;
+const server = app.listen(PORT, () => {
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
+});
+
 // ========== Graceful Shutdown ==========
 const shutdown = () => {
   console.log('Shutting down gracefully...');
@@ -118,9 +135,5 @@ const shutdown = () => {
   });
 };
 
-
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
-
-// ========== Daily Maintenance Notification Check at 9:00 AM ==========
-

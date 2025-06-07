@@ -31,30 +31,34 @@ const NotificationDropdown = ({ onClose }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // Map backend type to frontend display
+  const getDisplayType = (type) => {
+    if (['intervention_upcoming', 'maintenance_upcoming'].includes(type)) return 'Upcoming';
+    if (['intervention_missed', 'maintenance_overdue'].includes(type)) return 'Overdue';
+    return type;
+  };
+
   const fetchNotifications = async () => {
     setLoading(true);
+    setError(null);
     try {
       const response = await axios.get('http://localhost:8000/api/notifications', {
-        params: { limit: 10, read: 'false' }
+        params: {
+          limit: 10,
+          sort: '-createdAt', // Sort by createdAt descending (newest first)
+          read: 'false' // Prioritize unread, but backend will return all if none unread
+        }
       });
       setNotifications(response.data.notifications);
       setUnreadCount(response.data.total);
+      console.log(`Fetched ${response.data.notifications.length} recent notifications`);
       setError(null);
     } catch (err) {
-      setError('Failed to fetch notifications');
-      console.error('Error fetching notifications:', err);
+      const errorMessage = err.response?.data?.message || 'Failed to fetch notifications';
+      setError(errorMessage);
+      console.error('Error fetching notifications:', err.response || err);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const checkNotifications = async () => {
-    try {
-      await axios.post('http://localhost:8000/api/notifications/check');
-      fetchNotifications();
-    } catch (err) {
-      setError('Failed to check notifications');
-      console.error('Error checking notifications:', err);
     }
   };
 
@@ -62,23 +66,26 @@ const NotificationDropdown = ({ onClose }) => {
     try {
       await axios.put(`http://localhost:8000/api/notifications/${id}/read`);
       setNotifications(notifications.map(n => n._id === id ? { ...n, read: true, readAt: new Date() } : n));
-      setUnreadCount(unreadCount - 1);
+      setUnreadCount(Math.max(unreadCount - 1, 0));
+      console.log(`Notification ${id} marked as read`);
     } catch (err) {
       setError('Failed to mark notification as read');
-      console.error('Error marking notification as read:', err);
+      console.error('Error marking notification as read:', err.response || err);
     }
   };
 
   const deleteNotification = async (id) => {
     try {
       await axios.delete(`http://localhost:8000/api/notifications/${id}`);
+      const deletedNotification = notifications.find(n => n._id === id);
       setNotifications(notifications.filter(n => n._id !== id));
-      if (!notifications.find(n => n._id === id).read) {
-        setUnreadCount(unreadCount - 1);
+      if (deletedNotification && !deletedNotification.read) {
+        setUnreadCount(Math.max(unreadCount - 1, 0));
       }
+      console.log(`Notification ${id} deleted`);
     } catch (err) {
       setError('Failed to delete notification');
-      console.error('Error deleting notification:', err);
+      console.error('Error deleting notification:', err.response || err);
     }
   };
 
@@ -87,51 +94,57 @@ const NotificationDropdown = ({ onClose }) => {
   }, []);
 
   return (
-    <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-xl z-50 overflow-hidden">
+    <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-xl z-50 overflow-hidden notification-dropdown">
       <div className="p-4 bg-teal-700 text-white flex justify-between items-center">
-        <h3 className="text-lg font-semibold">Notifications ({unreadCount} unread)</h3>
-        <button
-          onClick={checkNotifications}
-          className="text-sm bg-teal-600 hover:bg-teal-500 px-3 py-1 rounded-full transition"
-        >
-          Check Now
-        </button>
+        <h3 className="text-lg font-semibold">Recent Notifications ({unreadCount} unread)</h3>
       </div>
       <div className="max-h-96 overflow-y-auto">
         {loading && <div className="p-4 text-center text-gray-500">Loading notifications...</div>}
         {error && <div className="p-4 text-center text-red-500">{error}</div>}
         {!loading && !error && notifications.length === 0 && (
-          <div className="p-4 text-center text-gray-500">No new notifications</div>
+          <div className="p-4 text-center text-gray-500">No recent notifications</div>
         )}
         {!loading && !error && notifications.map(notification => (
           <div
             key={notification._id}
-            className={`p-4 border-b border-gray-200 hover:bg-gray-50 transition ${
+            className={`p-4 border-b border-gray-200 hover:bg-gray-50 transition-colors ${
               notification.read ? 'bg-gray-100' : 'bg-white'
             }`}
           >
             <div className="flex justify-between items-start">
               <div className="flex-1">
-                <div className="flex items-center space-x-2">
-                  <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                    notification.type === 'overdue' ? 'bg-red-100 text-red-600' : 'bg-teal-100 text-teal-600'
-                  }`}>
-                    {notification.type.charAt(0).toUpperCase() + notification.type.slice(1)}
+                <div className="flex items-center space-x-2 mb-1">
+                  <span
+                    className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                      notification.type.includes('missed') || notification.type.includes('overdue')
+                        ? 'bg-red-200 text-red-800'
+                        : 'bg-teal-200 text-teal-800'
+                    }`}
+                  >
+                    {getDisplayType(notification.type)}
                   </span>
                   <span className="text-xs text-gray-500">
                     {new Date(notification.createdAt).toLocaleString('en-US', {
                       dateStyle: 'short',
-                      timeStyle: 'short'
+                      timeStyle: 'short',
+                      timeZone: 'Europe/Paris'
                     })}
                   </span>
                 </div>
                 <p className="text-sm text-gray-800 mt-1">{notification.message}</p>
-                <p className="text-xs text-gray-500 mt-1">
-                  Equipment: {notification.equipmentId?.name || 'Unknown'}
-                </p>
-                {notification.maintenanceId?.performedBy && (
-                  <p className="text-xs text-gray-500">
-                    Technician: {notification.maintenanceId.performedBy}
+                {notification.equipmentId?.name && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Equipment: {notification.equipmentId.name}
+                  </p>
+                )}
+                {notification.siteId && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Site: {notification.siteId}
+                  </p>
+                )}
+                {(notification.interventionId?.technician || notification.maintenanceId?.performedBy) && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Technician: {notification.interventionId?.technician?.name || notification.maintenanceId?.performedBy?.name || 'Unknown'}
                   </p>
                 )}
               </div>
@@ -142,7 +155,7 @@ const NotificationDropdown = ({ onClose }) => {
                     className="text-teal-600 hover:text-teal-800 text-xs"
                     title="Mark as read"
                   >
-                    <FaBell />
+                    <FaBell className="w-4 h-4" />
                   </button>
                 )}
                 <button
@@ -193,6 +206,7 @@ const NetworkEngineerDashboard = () => {
           params: { read: 'false', limit: 10 }
         });
         setUnreadCount(response.data.total);
+        console.log(`Fetched unread count: ${response.data.total}`);
       } catch (err) {
         console.error('Error fetching unread count:', err);
       }

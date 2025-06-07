@@ -1,110 +1,105 @@
 const Intervention = require('../models/Intervention');
 const Notification = require('../models/Notification');
-const User = require('../models/User'); // Added to fetch technician email
 const nodemailer = require('nodemailer');
 const moment = require('moment-timezone');
+const cron = require('node-cron');
 require('dotenv').config();
 
 // Configure nodemailer transporter
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
   tls: {
     rejectUnauthorized: false,
+    minVersion: 'TLSv1.2',
   },
+  logger: false, // Disable verbose logging
+  debug: false, // Disable debug output
 });
 
-// Send email notification with retry mechanism
-const sendEmailNotification = async (email, subject, message, retries = 3) => {
+// Send email notification without console logging
+const sendInterventionEmail = async (recipientEmail, subject, message) => {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    throw new Error('Missing email credentials');
+  }
+
+  if (!recipientEmail) {
+    throw new Error('Missing recipient email');
+  }
+
   const mailOptions = {
-    from: process.env.EMAIL_USER,
-    to: email,
+    from: `"GSM Monitor" <${process.env.EMAIL_USER}>`,
+    to: recipientEmail,
     subject,
     text: message,
   };
 
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    try {
-      await transporter.sendMail(mailOptions);
-      console.log(`Email sent successfully to ${email} on attempt ${attempt}`);
-      return true;
-    } catch (error) {
-      console.error(`Email sending error to ${email} on attempt ${attempt}:`, error.message);
-      if (attempt === retries) {
-        console.error(`Failed to send email to ${email} after ${retries} attempts`);
-        return false;
-      }
-      // Wait 1 second before retrying
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-    }
+  try {
+    await transporter.sendMail(mailOptions);
+    return true;
+  } catch (err) {
+    throw err; // Silent failure, no console logging
   }
 };
 
 // Check for upcoming and missed intervention notifications
-async function checkInterventionNotifications() {
+const checkInterventionNotifications = async (io) => {
+  let newNotifications = 0;
   try {
-    const now = moment().tz('Europe/Paris').toDate();
-    const inThreeDays = moment(now).tz('Europe/Paris').add(3, 'days').toDate();
+    const now = moment().tz('Africa/Tunis').toDate();
+    const inThreeDays = moment(now).tz('Africa/Tunis').add(3, 'days').toDate();
 
-    // Find upcoming (within 3 days) and missed interventions
     const dueInterventions = await Intervention.find({
       $or: [
-        { plannedDate: { $lte: inThreeDays, $gte: now }, status: 'planned' }, // Upcoming, only planned
-        { plannedDate: { $lt: now }, status: { $nin: ['completed', 'cancelled'] } }, // Missed, exclude completed/cancelled
+        { plannedDate: { $lte: inThreeDays, $gte: now }, status: { $in: ['planned', null] } },
+        { plannedDate: { $lt: now }, status: { $nin: ['completed', 'cancelled'] } },
       ],
     })
-      .populate('technician', 'name email')
+      .populate('technician', 'email') // Keep technician population for email
       .sort({ plannedDate: 1 });
 
     for (const intervention of dueInterventions) {
-      // Validate required fields
       if (
         !intervention.siteId ||
         !intervention.plannedDate ||
         !intervention.technician ||
         !intervention.technician.email
       ) {
-        console.warn(
-          `Skipping intervention ID ${intervention._id}: Missing siteId, plannedDate, technician, or technician email`
-        );
-        continue;
+        continue; // Silent skip
       }
 
-      // Determine notification type and message
-      const interventionDate = moment(intervention.plannedDate).tz('Europe/Paris');
+      const interventionDate = moment(intervention.plannedDate).tz('Africa/Tunis');
       const isMissed = interventionDate.toDate() < now && intervention.status !== 'completed';
       const notificationType = isMissed ? 'intervention_missed' : 'intervention_upcoming';
-      const siteName = intervention.siteId; // String, not populated
-      const technicianName = intervention.technician.name || 'Unknown Technician';
+      const siteName = intervention.siteId;
       const technicianEmail = intervention.technician.email;
+      const formattedDate = interventionDate.format('M/D/YY, h:mm A');
       const message = isMissed
-        ? `⚠️ Missed intervention for site ${siteName} (Technician: ${technicianName}) was scheduled on ${interventionDate.format('YYYY-MM-DD HH:mm')}.`
-        : `⏰ Reminder: Intervention for site ${siteName} (Technician: ${technicianName}) is scheduled on ${interventionDate.format('YYYY-MM-DD HH:mm')}.`;
+        ? `⚠️ Missed intervention for site ${siteName} was scheduled on ${interventionDate.format('YYYY-MM-DD HH:mm')}.\nSite: ${siteName}\nScheduled: ${formattedDate}`
+        : `⏰ Reminder: Intervention for site ${siteName} is scheduled on ${interventionDate.format('YYYY-MM-DD HH:mm')}.\nSite: ${siteName}\nScheduled: ${formattedDate}`;
 
-      // Check if this intervention has already been notified
-      const alreadyNotified = await Notification.findOne({
+      // Check for existing notification
+      const existingNotification = await Notification.findOne({
         interventionId: intervention._id,
         type: notificationType,
       });
 
-      if (alreadyNotified) {
-        console.log(
-          `Notification already exists for intervention ${intervention._id} (${notificationType})`
-        );
-        continue;
+      if (existingNotification) {
+        continue; // Silent skip
       }
 
-      // Create notification
       const notification = new Notification({
         interventionId: intervention._id,
         siteId: intervention.siteId,
         type: notificationType,
         scheduledDate: intervention.plannedDate,
         sent: false,
-        emailTo: technicianEmail, // Use technician's email
+        emailTo: technicianEmail,
         message,
         read: false,
         readAt: null,
@@ -112,9 +107,9 @@ async function checkInterventionNotifications() {
       });
 
       await notification.save();
+      newNotifications++;
 
-      // Send email
-      const emailSent = await sendEmailNotification(
+      const emailSent = await sendInterventionEmail(
         notification.emailTo,
         isMissed ? '⚠️ Missed Intervention Alert' : '⏰ Intervention Reminder',
         message
@@ -124,32 +119,126 @@ async function checkInterventionNotifications() {
         notification.sent = true;
         await notification.save();
       }
-
-      console.log(
-        `✅ Notification created and ${emailSent ? 'email sent' : 'email failed'} for intervention ${
-          intervention._id
-        } (${notificationType})`
-      );
     }
   } catch (err) {
-    console.error('Error checking intervention notifications:', err.message);
-    throw err; // Re-throw to handle in calling function
+    // Silent error handling
   }
-}
+  return newNotifications;
+};
 
-// Check and create notifications (for startup or manual trigger)
-async function checkAndCreateInterventionNotifications() {
+// Schedule notification checks with cron
+const checkAndCreateNotifications = (io) => {
+  cron.schedule('*/1 * * * *', async () => {
+    let totalNewNotifications = 0;
+    try {
+      totalNewNotifications += await checkInterventionNotifications(io);
+
+      if (totalNewNotifications > 0 && io) {
+        const notifications = await Notification.find({ read: false })
+          .populate('interventionId', 'description status') // Exclude technician from populate
+          .limit(10);
+        io.emit('new-notifications', { notifications, total: notifications.length });
+      }
+    } catch (error) {
+      // Silent retry (consider logging in production)
+    }
+  });
+};
+
+// Get all notifications (filtered to interventions only)
+const getNotifications = async (req, res) => {
   try {
-    console.log('Running intervention notification check...');
-    await checkInterventionNotifications();
-    return { success: true, message: 'Checked and created intervention notifications successfully' };
+    const { read, type, email, page = 1, limit = 10 } = req.query;
+    const filter = {
+      type: { $in: ['intervention_upcoming', 'intervention_missed'] }, // Restrict to intervention notifications
+    };
+
+    if (read) {
+      if (read !== 'true' && read !== 'false') {
+        return res.status(400).json({ message: 'Invalid value for "read" parameter. Use "true" or "false".' });
+      }
+      filter.read = read === 'true';
+    }
+
+    if (type) {
+      if (!['intervention_upcoming', 'intervention_missed'].includes(type)) {
+        return res.status(400).json({ message: 'Invalid notification type. Use "intervention_upcoming" or "intervention_missed".' });
+      }
+      filter.type = type;
+    }
+
+    if (email) {
+      filter.emailTo = email;
+    }
+
+    const notifications = await Notification.find(filter)
+      .populate({
+        path: 'interventionId',
+        select: 'description status', // Exclude technician from select
+      })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit));
+
+    const totalNotifications = await Notification.countDocuments(filter);
+
+    res.status(200).json({
+      notifications,
+      total: totalNotifications,
+      page: parseInt(page),
+      totalPages: Math.ceil(totalNotifications / limit),
+    });
   } catch (error) {
-    console.error('Error in checkAndCreateInterventionNotifications:', error.message);
-    throw error;
+    res.status(500).json({ message: 'Error fetching notifications', error: 'Internal server error' });
   }
-}
+};
+
+// Mark notification as read
+const markNotificationRead = async (req, res) => {
+  try {
+    const notificationId = req.params.id;
+    const notification = await Notification.findOne({
+      _id: notificationId,
+      type: { $in: ['intervention_upcoming', 'intervention_missed'] },
+    });
+
+    if (!notification) {
+      return res.status(404).json({ message: 'Intervention notification not found' });
+    }
+
+    notification.read = true;
+    notification.readAt = new Date();
+    await notification.save();
+
+    res.status(200).json({ message: 'Notification marked as read', notification });
+  } catch (error) {
+    res.status(500).json({ message: 'Error marking notification as read', error: 'Internal server error' });
+  }
+};
+
+// Delete notification
+const deleteNotification = async (req, res) => {
+  try {
+    const notificationId = req.params.id;
+    const notification = await Notification.findOneAndDelete({
+      _id: notificationId,
+      type: { $in: ['intervention_upcoming', 'intervention_missed'] },
+    });
+
+    if (!notification) {
+      return res.status(404).json({ message: 'Intervention notification not found' });
+    }
+
+    res.status(200).json({ message: 'Notification deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error deleting notification', error: 'Internal server error' });
+  }
+};
 
 module.exports = {
   checkInterventionNotifications,
-  checkAndCreateInterventionNotifications,
+  checkAndCreateNotifications,
+  getNotifications,
+  markNotificationRead,
+  deleteNotification,
+  sendInterventionEmail,
 };

@@ -66,11 +66,19 @@ const NetworkReports = () => {
     setLoading(true);
     try {
       const endpoint = selectedRole === 'all' ? `${API_URL}/users` : `${API_URL}/technicians`;
-      const res = await axios.get(endpoint);
-      const usersData = res.data.data || res.data;
+      const userRes = await axios.get(endpoint);
+      let usersData = userRes.data.data || userRes.data;
+
+      // Map assignedSites to site_reference or name as fallback
+      usersData = usersData.map(user => ({
+        ...user,
+        assignedSiteNames: user.assignedSites?.map(site => site.site_reference || site.name || 'Unknown Site') || [],
+      }));
+
       setUsers(usersData);
     } catch (err) {
       showToast('Failed to fetch user reports', 'error');
+      console.error('Error fetching users:', err.response?.data || err.message);
     } finally {
       setLoading(false);
     }
@@ -206,7 +214,7 @@ const NetworkReports = () => {
                 <TableCell>Role</TableCell>
                 <TableCell>Department</TableCell>
                 <TableCell>Status</TableCell>
-                <TableCell>Sites</TableCell>
+                <TableCell>Assigned Sites</TableCell>
                 <TableCell>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <AccessTimeIcon fontSize="small" />
@@ -244,7 +252,9 @@ const NetworkReports = () => {
                       />
                     </TableCell>
                     <TableCell>
-                      {user.assignedSites?.length || 0} Site(s)
+                      {user.assignedSiteNames?.length > 0
+                        ? user.assignedSiteNames.join(', ')
+                        : 'No Sites'}
                     </TableCell>
                     <TableCell>{formatDate(user.lastLogin)}</TableCell>
                     <TableCell align="right">

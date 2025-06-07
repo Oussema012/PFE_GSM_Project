@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import InterventionModal from '../NetworkEngineer/InterventionModal';
 
 // Placeholder SVG logo
 const Logo = () => (
@@ -107,6 +108,7 @@ const DashInterventions = () => {
     dateTo: '',
   });
   const [sortConfig, setSortConfig] = useState({ key: 'plannedDate', direction: 'asc' });
+  const [selectedIntervention, setSelectedIntervention] = useState(null);
 
   // Fetch all interventions
   useEffect(() => {
@@ -303,7 +305,6 @@ const DashInterventions = () => {
               <option value="planned">Planned</option>
               <option value="in-progress">In Progress</option>
               <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
             </select>
             <p id="status-description" className="sr-only">
               Select a status to filter interventions.
@@ -593,7 +594,7 @@ const DashInterventions = () => {
                           d={
                             sortConfig.direction === 'asc'
                               ? 'M19 9l-7 7-7-7'
-                              : 'M5 15l7-7 7 7'
+                              : 'M5 15l-7 7 7'
                           }
                         />
                       </svg>
@@ -647,13 +648,37 @@ const DashInterventions = () => {
                     )}
                   </div>
                 </th>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  role="columnheader"
+                >
+                  <div className="flex items-center gap-2">
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      xmlns="http://www.w3.org/2000/svg"
+                      aria-hidden="true"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
+                      />
+                    </svg>
+                    Actions
+                  </div>
+                </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredInterventions.length === 0 ? (
                 <tr>
                   <td
-                    colSpan="5"
+                    colSpan="6"
                     className="px-6 py-4 text-center text-gray-500"
                     role="alert"
                   >
@@ -664,7 +689,15 @@ const DashInterventions = () => {
                 filteredInterventions.map((intervention) => (
                   <tr
                     key={intervention._id}
-                    className="hover:bg-gray-50"
+                    className={`${
+                      intervention.status === 'completed'
+                        ? 'bg-green-50 hover:bg-green-100'
+                        : intervention.status === 'planned'
+                        ? 'bg-red-50 hover:bg-red-100'
+                        : intervention.status === 'in-progress'
+                        ? 'bg-orange-50 hover:bg-orange-100'
+                        : 'hover:bg-gray-50'
+                    }`}
                     role="row"
                   >
                     <td
@@ -700,12 +733,54 @@ const DashInterventions = () => {
                     <td className="px-6 py-4 text-sm text-gray-900">
                       {intervention.status || 'N/A'}
                     </td>
+                    <td className="px-6 py-4 text-sm">
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedIntervention(intervention);
+                          }}
+                          className="text-indigo-600 hover:text-indigo-900 p-1 rounded-md"
+                          aria-label={`View details for intervention ${intervention.siteId || 'unknown'}`}
+                        >
+                          <svg
+                            className="w-5 h-5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            xmlns="http://www.w3.org/2000/svg"
+                            aria-hidden="true"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                            />
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                            />
+                          </svg>
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))
               )}
             </tbody>
           </table>
         </div>
+      )}
+
+      {/* Modal */}
+      {selectedIntervention && (
+        <InterventionModal
+          intervention={selectedIntervention}
+          onClose={() => setSelectedIntervention(null)}
+        />
       )}
     </div>
   );

@@ -1,126 +1,60 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import {
-  FiCheckCircle,
-  FiXCircle,
-  FiAlertCircle,
-  FiRefreshCw,
-  FiClock,
-  FiCheck,
-  FiEyeOff,
-  FiFilter,
-  FiSearch,
-  FiCalendar,
-  FiPlus,
-  FiTrash2,
-} from 'react-icons/fi';
-import CreateAlert from '../NetworkEngineer/CreateAlert';
-import ResolveByType from '../NetworkEngineer/ResolveByType';
-import DeleteAlert from '../NetworkEngineer/DeleteAlert';
-import AcknowledgeAlert from '../NetworkEngineer/AcknowledgeAlert';
 import DetailAlert from '../NetworkEngineer/DetailAlert';
+import debounce from 'lodash/debounce';
 
-// Validate site_reference format (e.g., "SITE001")
-const isValidSiteReference = (siteId) => /^[A-Z0-9]+$/.test(siteId);
+// Spinner Component
+const Spinner = () => (
+  <svg
+    className="animate-spin h-5 w-5 text-white"
+    xmlns="http://www.w3.org/2000/svg"
+    fill="none"
+    viewBox="0 0 24 24"
+    aria-hidden="true"
+  >
+    <circle
+      className="opacity-25"
+      cx="12"
+      cy="12"
+      r="10"
+      stroke="currentColor"
+      strokeWidth="4"
+    />
+    <path
+      className="opacity-75"
+      fill="currentColor"
+      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+    />
+  </svg>
+);
 
 const DashNotifications = () => {
   const [alerts, setAlerts] = useState([]);
-  const [siteId, setSiteId] = useState('');
   const [filter, setFilter] = useState('history'); // Default to 'history'
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredAlerts, setFilteredAlerts] = useState([]);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showResolveByTypeModal, setShowResolveByTypeModal] = useState(false);
   const [selectedAlert, setSelectedAlert] = useState(null);
-  const [showDetailModal, setShowDetailModal] = useState(false);
-  const [resolving, setResolving] = useState(null);
-  const [siteReferences, setSiteReferences] = useState([]);
 
   axios.defaults.baseURL = 'http://localhost:8000';
-
-  // Fetch site references for dropdown
-  useEffect(() => {
-    const fetchSiteReferences = async () => {
-      try {
-        const response = await axios.get('/api/sites/references');
-        // Normalize to array of strings for consistency
-        const references = Array.isArray(response.data)
-          ? response.data.map((site) => site.site_reference).filter(Boolean)
-          : [];
-        setSiteReferences(references);
-      } catch (error) {
-        console.error('Failed to fetch site references:', error.response?.data || error.message);
-        setError('Failed to fetch site references. Using fallback options.');
-        setSiteReferences(['SITE001', 'SITE002']);
-      }
-    };
-    fetchSiteReferences();
-  }, []);
 
   const fetchAlerts = async () => {
     setLoading(true);
     setError('');
-    setSuccessMessage('');
 
     try {
-      let url = '/api/alerts/history'; // Default to history endpoint
+      let url = '/api/alerts/history';
+      const params = new URLSearchParams();
 
-      // Validate siteId if provided
-      if (siteId && !isValidSiteReference(siteId)) {
-        setError('Invalid site reference format (e.g., SITE001)');
-        setLoading(false);
-        return;
+      if (filter === 'active') {
+        url = '/api/alerts';
+        params.append('status', 'active');
+      } else if (filter === 'resolved') {
+        url = '/api/alerts/resolved';
       }
 
-      if (siteId) {
-        switch (filter) {
-          case 'active':
-            url = `/api/alerts/active/${siteId}`;
-            break;
-          case 'resolved':
-            url = `/api/alerts/history/resolved/${siteId}`;
-            break;
-          case 'history':
-            url = `/api/alerts/history/${siteId}`;
-            break;
-          default:
-            setError('Invalid filter configuration');
-            setLoading(false);
-            return;
-        }
-      } else {
-        switch (filter) {
-          case 'active':
-            url = '/api/alerts';
-            break;
-          case 'resolved':
-            url = `/api/alerts/resolved`;
-            break;
-          case 'history':
-            url = '/api/alerts/history';
-            break;
-          default:
-            setError('Invalid filter configuration');
-            setLoading(false);
-            return;
-        }
-      }
-
-      // Apply date range for 'resolved' or 'history' filters
-      if ((filter === 'resolved' || filter === 'history') && startDate && endDate) {
-        if (new Date(endDate) < new Date(startDate)) {
-          setError('End date cannot be before start date');
-          setLoading(false);
-          return;
-        }
-        const params = new URLSearchParams();
-        params.append('startDate', startDate);
-        params.append('endDate', endDate);
+      if (params.toString()) {
         url += `?${params.toString()}`;
       }
 
@@ -129,16 +63,52 @@ const DashNotifications = () => {
       const normalizedAlerts = Array.isArray(response.data)
         ? response.data.map((alert) => ({
             ...alert,
-            siteId: alert.siteId || 'N/A',
+            siteId: alert.siteId || 'No',
+            status: alert.status || 'unknown',
+            type: alert.type || 'No',
+            message: '',
+            age: '',
+            createdAt: alert.createdAt || null,
+            resolvedAt: alert.resolvedAt || null,
+            acknowledged: !!alert.acknowledged,
           }))
         : [];
       setAlerts(normalizedAlerts);
       console.log('Fetched alerts:', normalizedAlerts);
+
+      // Fallback for active alerts if endpoint fails
+      if (filter === 'active' && normalizedAlerts.length === 0) {
+        console.warn('No active alerts returned, fetching all and filtering client-side');
+        alert('Fallback');
+        alert('Failed alerts');
+        const fallbackResponse = await axios.get('/api/alerts/history');
+        alert('Fallback alerts');
+        const fallbackAlerts = [];
+        Array.isArray(fallbackResponse.data)
+          ? fallbackResponse.data
+              .filter((alert) => alert.status === 'active')
+              .map((alert) => ({
+                ...alert,
+                siteId: alert.siteId || 'No',
+                status: alert.status || 'unknown',
+                type: alert.type || 'No',
+                message: '',
+                age: '',
+                createdAt: alert.createdAt || null,
+                resolvedAt: alert.resolvedAt || null,
+                acknowledged: !!alert.acknowledged,
+              }))
+          : [];
+        setAlerts(fallbackAlerts);
+        console.log('Fallback active alerts:', fallbackAlerts);
+      }
     } catch (err) {
       console.error('Fetch alerts error:', err.response?.data || err.message);
       if (err.response?.status === 404) {
         setError('No alerts found for the specified criteria.');
         setAlerts([]);
+      } else if (err.response?.status === 400) {
+        setError('Invalid request format. Please check filter settings.');
       } else {
         setError(`Failed to fetch alerts: ${err.response?.data?.message || err.message}`);
       }
@@ -147,456 +117,557 @@ const DashNotifications = () => {
     }
   };
 
-  const resolveAlert = async (id) => {
-    setResolving(id);
-    setError('');
-    setSuccessMessage('');
-
-    // Optimistic update
-    setAlerts((prevAlerts) =>
-      prevAlerts.map((alert) =>
-        alert._id === id
-          ? { ...alert, status: 'resolved', resolvedAt: new Date().toISOString() }
-          : alert
-      )
-    );
-
-    try {
-      const response = await axios.put(`/api/alerts/resolve/${id}`);
-      const updatedAlert = response.data.alert;
-
-      setAlerts((prevAlerts) =>
-        prevAlerts.map((alert) =>
-          alert._id === id
-            ? {
-                ...alert,
-                status: updatedAlert.status,
-                resolvedAt: updatedAlert.resolvedAt,
-              }
-            : alert
-        )
-      );
-      setSuccessMessage('Alert resolved successfully');
-      setTimeout(() => setSuccessMessage(''), 3000);
-    } catch (err) {
-      // Rollback optimistic update
-      setAlerts((prevAlerts) =>
-        prevAlerts.map((alert) =>
-          alert._id === id ? { ...alert, status: 'active', resolvedAt: null } : alert
-        )
-      );
-      setError(`Failed to resolve alert: ${err.response?.data?.message || err.message}`);
-    } finally {
-      setResolving(null);
-    }
-  };
+  // Debounced search filter
+  const filterAlerts = useCallback(
+    debounce((alerts, query) => {
+      const filtered = alerts.filter((alert) => {
+        const q = query?.toLowerCase() || '';
+        const siteIdStr = alert.siteId || '';
+        return (
+          siteIdStr.toLowerCase().includes(q) ||
+          (alert.type || '').toLowerCase().includes(q) ||
+          (alert.message || '').toLowerCase().includes(q)
+        );
+      });
+      setFilteredAlerts(filtered);
+    }, 300),
+    []
+  );
 
   useEffect(() => {
-    const filtered = alerts.filter((alert) => {
-      const query = searchQuery?.toLowerCase() || '';
-      const siteIdStr = alert.siteId || '';
-      return (
-        siteIdStr.toLowerCase().includes(query) ||
-        (alert.type || '').toLowerCase().includes(query) ||
-        (alert.message || '').toLowerCase().includes(query)
-      );
-    });
-    setFilteredAlerts(filtered);
-  }, [alerts, searchQuery]);
+    filterAlerts(alerts, searchQuery);
+  }, [alerts, searchQuery, filterAlerts]);
 
   useEffect(() => {
     fetchAlerts();
-  }, [siteId, filter, startDate, endDate]);
+  }, [filter]);
 
   const handleFilterChange = (e) => {
-    const newFilter = e.target.value;
-    setFilter(newFilter);
-    if (newFilter === 'active') {
-      setStartDate('');
-      setEndDate('');
-    }
-  };
-
-  const handleCreateSuccess = (newAlert, message) => {
-    setAlerts([...alerts, { ...newAlert, siteId: newAlert.siteId || 'N/A' }]);
-    setSuccessMessage(message);
-    setTimeout(() => setSuccessMessage(''), 3000);
-  };
-
-  const handleResolveByTypeSuccess = ({ siteId, type }, message) => {
-    setAlerts(
-      alerts.map((alert) =>
-        alert.siteId === siteId && alert.type === type && alert.status === 'active'
-          ? { ...alert, status: 'resolved', resolvedAt: new Date().toISOString() }
-          : alert
-      )
-    );
-    setSuccessMessage(message);
-    setTimeout(() => setSuccessMessage(''), 3000);
-  };
-
-  const handleDeleteSuccess = (alertId, message) => {
-    setAlerts(alerts.filter((alert) => alert._id !== alertId));
-    setSuccessMessage(message);
-    setTimeout(() => setSuccessMessage(''), 3000);
-  };
-
-  const handleAcknowledgeSuccess = (alertId, updatedAlert, message) => {
-    setAlerts(
-      alerts.map((alert) =>
-        alert._id === alertId
-          ? { ...alert, acknowledged: true, acknowledgedAt: new Date().toISOString() }
-          : alert
-      )
-    );
-    setSuccessMessage(message);
-    setTimeout(() => setSuccessMessage(''), 3000);
-  };
-
-  const handleRowClick = (alert) => {
-    setSelectedAlert(alert);
-    setShowDetailModal(true);
+    setFilter(e.target.value);
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow">
-        <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center">
-            <h1 className="text-3xl font-bold text-gray-900">
-              <FiAlertCircle className="inline-block mr-2 text-indigo-600" />
-              Alert Dashboard
-            </h1>
-            <div className="flex space-x-2">
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
-              >
-                <FiPlus className="mr-2" />
-                Create Alert
-              </button>
-              <button
-                onClick={() => setShowResolveByTypeModal(true)}
-                className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-              >
-                <FiCheckCircle className="mr-2" />
-                Resolve by Type
-              </button>
-              <button
-                onClick={fetchAlerts}
-                className="flex items-center px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
-              >
-                <FiRefreshCw className={`mr-2 ${loading ? 'animate-spin' : ''}`} />
-                Refresh
-              </button>
-            </div>
-          </div>
-        </div>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <header className="flex items-center gap-3 mb-6">
+        <svg
+          className="w-10 h-10 text-indigo-600"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          xmlns="http://www.w3.org/2000/svg"
+          aria-hidden="true"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            d="M13 10V3L4 14h7v7l9-11h-7z"
+          />
+        </svg>
+        <h1 className="text-3xl font-bold text-gray-900">Alert Dashboard</h1>
       </header>
 
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        {successMessage && (
-          <div className="mb-4 p-4 bg-green-50 border-l-4 border-green-400 rounded">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <FiCheckCircle className="h-5 w-5 text-green-400" />
-              </div>
-              <div className="ml-3">
-                <p className="text-sm text-green-700">{successMessage}</p>
-              </div>
-            </div>
-          </div>
-        )}
+      {/* Action Buttons */}
+      <div className="mb-6 flex justify-end space-x-3">
+        <button
+          onClick={fetchAlerts}
+          className="flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 focus:ring-2 focus:ring-gray-500 disabled:bg-gray-300 disabled:cursor-not-allowed"
+          aria-label="Refresh alerts"
+        >
+          {loading ? (
+            <Spinner />
+          ) : (
+            <svg
+              className="w-5 h-5 mr-2"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+          )}
+          Refresh
+        </button>
+      </div>
 
-        {error && (
-          <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-400 rounded">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <FiAlertCircle className="h-5 w-5 text-red-400" />
-              </div>
-              <div className="ml-3">
-                <p className="text-sm text-red-700">{error}</p>
-              </div>
-            </div>
-          </div>
-        )}
+      {/* Error Message */}
+      {error && (
+        <div
+          className="mb-6 p-4 bg-red-50 border-l-4 border-red-600 text-red-700 rounded-lg shadow-sm"
+          role="alert"
+        >
+          <span className="font-medium">{error}</span>
+        </div>
+      )}
 
-        <div className="bg-white shadow rounded-lg p-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
-              <div className="relative rounded-md shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <FiSearch className="text-gray-400" />
-                </div>
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search alerts..."
-                  className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Site Reference</label>
-              <select
-                value={siteId}
-                onChange={(e) => setSiteId(e.target.value)}
-                className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-3 pr-10 py-2 border border-gray-300 rounded-md"
+      {/* Filters */}
+      <div className="mb-6 p-6 bg-white border border-gray-200 rounded-xl shadow-lg">
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex-1">
+            <label htmlFor="searchQuery" className="block text-sm font-medium text-gray-700 mb-1">
+              Search
+            </label>
+            <div className="relative">
+              <input
+                id="searchQuery"
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search alerts..."
+                className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 pl-10"
+                aria-describedby="searchQuery-description"
+              />
+              <svg
+                className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                xmlns="http://www.w3.org/2000/svg"
+                aria-hidden="true"
               >
-                <option value="">All sites</option>
-                {siteReferences.map((ref) => (
-                  <option key={ref} value={ref}>
-                    {ref}
-                  </option>
-                ))}
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
+              </svg>
+            </div>
+            <p id="searchQuery-description" className="sr-only">
+              Enter a search term to filter alerts.
+            </p>
+          </div>
+          <div className="flex-1">
+            <label htmlFor="filter" className="block text-sm font-medium text-gray-700 mb-1">
+              Status
+            </label>
+            <div className="relative">
+              <select
+                id="filter"
+                value={filter}
+                onChange={handleFilterChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                aria-describedby="filter-description"
+              >
+                <option value="history">All Alerts</option>
+                <option value="active">Active Alerts</option>
+                <option value="resolved">Resolved Alerts</option>
               </select>
+              <svg
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                xmlns="http://www.w3.org/2000/svg"
+                aria-hidden="true"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707v3.586a1 1 0 01-.293.707l-2 2a1 1 0 01-1.414 0l-2-2a1 1 0 01-.293-.707v-3.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
+                />
+              </svg>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-              <div className="relative">
-                <select
-                  value={filter}
-                  onChange={handleFilterChange}
-                  className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-3 pr-10 py-2 border border-gray-300 rounded-md appearance-none"
-                >
-                  <option value="history">All Alerts</option>
-                  <option value="active">Active Alerts</option>
-                  <option value="resolved">Resolved Alerts</option>
-                </select>
-                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                  <FiFilter className="text-gray-400" />
-                </div>
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Date Range</label>
-              <div className="flex space-x-2">
-                <div className="relative flex-1">
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-3 pr-10 py-2 border border-gray-300 rounded-md"
-                    disabled={filter === 'active'}
-                  />
-                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                    <FiCalendar className="text-gray-400" />
-                  </div>
-                </div>
-                <div className="relative flex-1">
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-3 pr-10 py-2 border border-gray-300 rounded-md"
-                    disabled={filter === 'active'}
-                  />
-                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                    <FiCalendar className="text-gray-400" />
-                  </div>
-                </div>
-              </div>
-            </div>
+            <p id="filter-description" className="sr-only">
+              Select a status to filter alerts.
+            </p>
           </div>
         </div>
+      </div>
 
-        <CreateAlert
-          isOpen={showCreateModal}
-          onClose={() => setShowCreateModal(false)}
-          onSuccess={handleCreateSuccess}
-          onError={setError}
-          siteReferences={siteReferences}
-        />
-
-        <ResolveByType
-          isOpen={showResolveByTypeModal}
-          onClose={() => setShowResolveByTypeModal(false)}
-          onSuccess={handleResolveByTypeSuccess}
-          onError={setError}
-          siteReferences={siteReferences}
-        />
-
+      {/* Modals */}
+      {selectedAlert && (
         <DetailAlert
-          isOpen={showDetailModal}
-          onClose={() => setShowDetailModal(false)}
+          isOpen={!!selectedAlert}
+          onClose={() => setSelectedAlert(null)}
           alert={selectedAlert}
         />
+      )}
 
-        {loading && (
-          <div className="flex justify-center items-center p-8">
-            <FiRefreshCw className="animate-spin h-8 w-8 text-indigo-600" />
-            <span className="ml-2 text-gray-600">Loading alerts...</span>
-          </div>
-        )}
-
-        {!loading && (
-          <div className="mb-4 text-sm text-gray-600">
-            Showing {filteredAlerts.length} alert{filteredAlerts.length !== 1 ? 's' : ''}
-          </div>
-        )}
-
-        {!loading && (
-          <div className="bg-white shadow rounded-lg overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+      {/* Alerts Table */}
+      {loading ? (
+        <div className="flex items-center justify-center py-8">
+          <Spinner />
+          <span className="ml-3 text-gray-600">Loading alerts...</span>
+        </div>
+      ) : (
+        <div className="bg-white border border-gray-200 rounded-xl shadow-lg overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200" role="grid">
+            <thead className="bg-gray-50">
+              <tr>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
+                  <div className="flex items-center gap-2">
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      xmlns="http://www.w3.org/2000/svg"
+                      aria-hidden="true"
                     >
-                      Site Reference
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                      />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                      />
+                    </svg>
+                    Site Reference
+                  </div>
+                </th>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
+                  <div className="flex items-center gap-2">
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      xmlns="http://www.w3.org/2000/svg"
+                      aria-hidden="true"
                     >
-                      Type
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"
+                      />
+                    </svg>
+                    Type
+                  </div>
+                </th>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
+                  <div className="flex items-center gap-2">
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      xmlns="http://www.w3.org/2000/svg"
+                      aria-hidden="true"
                     >
-                      Message
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M13 16h-1v-4h-1m0 0"
+                      />
+                    </svg>
+                    Message
+                  </div>
+                </th>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
+                  <div className="flex items-center gap-2">
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      xmlns="http://www.w3.org/2000/svg"
+                      aria-hidden="true"
                     >
-                      Status
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M9 12l2 2 4-4m6 2"
+                      />
+                    </svg>
+                    Status
+                  </div>
+                </th>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
+                  <div className="flex items-center gap-2">
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      xmlns="http://www.w3.org/2000/svg"
+                      aria-hidden="true"
                     >
-                      <FiClock className="inline-block mr-1" /> Created
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M12 8v4l3 3m0 0"
+                      />
+                    </svg>
+                    Created
+                  </div>
+                </th>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
+                  <div className="flex items-center gap-2">
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      xmlns="http://www.w3.org/2000/svg"
+                      aria-hidden="true"
                     >
-                      <FiCheck className="inline-block mr-1" /> Resolved
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M9 12l2 2 4-4m6 2"
+                      />
+                    </svg>
+                    Resolved
+                  </div>
+                </th>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
+                  <div className="flex items-center gap-2">
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      xmlns="http://www.w3.org/2000/svg"
+                      aria-hidden="true"
                     >
-                      Acknowledged
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                      />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                      />
+                    </svg>
+                    Acknowledged
+                  </div>
+                </th>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
+                  <div className="flex items-center gap-2">
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      xmlns="http://www.w3.org/2000/svg"
+                      aria-hidden="true"
                     >
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredAlerts.length > 0 ? (
-                    filteredAlerts.map((alert) => (
-                      <tr
-                        key={alert._id}
-                        className="hover:bg-gray-50 cursor-pointer"
-                        onClick={() => handleRowClick(alert)}
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                      />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                      />
+                    </svg>
+                    View Details
+                  </div>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredAlerts.length > 0 ? (
+                filteredAlerts.map((alert) => (
+                  <tr
+                    key={alert._id}
+                    className={`${
+                      alert.status === 'active'
+                        ? 'bg-red-50 hover:bg-red-100'
+                        : alert.status === 'resolved'
+                        ? 'bg-green-50 hover:bg-green-100'
+                        : 'hover:bg-gray-50'
+                    }`}
+                    role="row"
+                  >
+                    <td
+                      className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-600"
+                      style={{
+                        maxWidth: '200px',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {alert.siteId}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                        {alert.type}
+                      </span>
+                    </td>
+                    <td
+                      className="px-6 py-4 text-sm text-gray-500"
+                      style={{
+                        maxWidth: '200px',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {alert.message}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <span
+                        className={`px-2 py-1 inline-flex items-center text-xs leading-5 font-semibold rounded-full ${
+                          alert.status === 'active'
+                            ? 'bg-red-100 text-red-800'
+                            : 'bg-green-100 text-green-800'
+                        }`}
                       >
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {alert.siteId || 'N/A'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
-                            {alert.type || 'N/A'}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
-                          {alert.message || 'No message'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          <span
-                            className={`px-2 py-1 inline-flex items-center text-xs leading-5 font-semibold rounded-full ${
-                              alert.status === 'active'
-                                ? 'bg-red-100 text-red-800'
-                                : 'bg-green-100 text-green-800'
-                            }`}
+                        {alert.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {alert.createdAt ? new Date(alert.createdAt).toLocaleString() : 'No'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {alert.resolvedAt ? new Date(alert.resolvedAt).toLocaleString() : '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {alert.acknowledged ? (
+                        <span className="inline-flex items-center text-green-600">
+                          <svg
+                            className="w-4 h-4 mr-1"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            xmlns="http://www.w3.org/2000/svg"
+                            aria-hidden="true"
                           >
-                            {alert.status === 'active' ? (
-                              <FiXCircle className="mr-1" />
-                            ) : (
-                              <FiCheckCircle className="mr-1" />
-                            )}
-                            {alert.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {alert.createdAt ? new Date(alert.createdAt).toLocaleString() : 'N/A'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {alert.resolvedAt ? new Date(alert.resolvedAt).toLocaleString() : '-'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {alert.acknowledged ? (
-                            <span className="inline-flex items-center text-green-600">
-                              <FiCheck className="mr-1" /> I saw it
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center text-red-600">
-                              <FiEyeOff className="mr-1" /> No
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <div className="flex justify-end space-x-2">
-                            {alert.status === 'active' && (
-                              <>
-                                {!alert.acknowledged && (
-                                  <AcknowledgeAlert
-                                    alertId={alert._id}
-                                    onSuccess={handleAcknowledgeSuccess}
-                                    onError={setError}
-                                  />
-                                )}
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    resolveAlert(alert._id);
-                                  }}
-                                  className={`flex items-center text-green-600 hover:text-green-900 ${
-                                    resolving === alert._id ? 'opacity-50 cursor-not-allowed' : ''
-                                  }`}
-                                  title="Resolve"
-                                  disabled={resolving === alert._id}
-                                >
-                                  {resolving === alert._id ? (
-                                    <FiRefreshCw className="h-5 w-5 animate-spin" />
-                                  ) : (
-                                    <FiCheckCircle className="h-5 w-5" />
-                                  )}
-                                </button>
-                              </>
-                            )}
-                            <DeleteAlert
-                              alertId={alert._id}
-                              onSuccess={handleDeleteSuccess}
-                              onError={setError}
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M5 13l4 4L19 7"
                             />
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan="8" className="px-6 py-4 text-center text-sm text-gray-500">
-                        No alerts found matching your criteria
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-      </main>
+                          </svg>
+                          Acknowledged
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center text-red-600">
+                          <svg
+                            className="w-4 h-4 mr-1"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            xmlns="http://www.w3.org/2000/svg"
+                            aria-hidden="true"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m4.934.979A6 6 0 0112 10c1.657 0 3 .672 4.06 1.828"
+                            />
+                          </svg>
+                          Not Acknowledged
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedAlert(alert);
+                        }}
+                        className="text-indigo-600 hover:text-indigo-900 p-1 rounded-md"
+                        aria-label={`View details for alert ${alert.siteId || 'unknown'}`}
+                      >
+                        <svg
+                          className="w-5 h-5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                          xmlns="http://www.w3.org/2000/svg"
+                          aria-hidden="true"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                          />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                          />
+                        </svg>
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td
+                    colSpan="8"
+                    className="px-6 py-4 text-center text-sm text-gray-500"
+                    role="alert"
+                  >
+                    No alerts found matching your criteria
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Custom Tailwind animation for fade-in */}
+      <style>
+        {`
+          @keyframes fade-in {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+          .animate-fade-in {
+            animation: fade-in 0.3s ease-out;
+          }
+        `}
+      </style>
     </div>
   );
 };

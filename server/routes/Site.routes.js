@@ -10,6 +10,6 @@ router.get('/:id', siteController.getSiteById);
 router.put('/:id', siteController.updateSite);
 router.delete('/:id', siteController.deleteSite);
 router.get('/', siteController.getAllSites);
-
+router.post('/technicians/assign', siteController.assignTechnicianToSites); // Add this line
 
 module.exports = router;

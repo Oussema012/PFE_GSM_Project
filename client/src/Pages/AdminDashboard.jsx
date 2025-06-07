@@ -234,7 +234,7 @@ const AdminDashboard = () => {
                 } transition`}
               >
                 <FaBell className="mr-3 text-blue-300" />
-                Recent Alerts
+                Notifications
                 {unreadCount > 0 && (
                   <span className="ml-2 w-5 h-5 bg-red-500 text-white text-xs flex items-center justify-center rounded-full">
                     {unreadCount}

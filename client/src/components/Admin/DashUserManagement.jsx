@@ -25,7 +25,6 @@ import {
 import {
   Search as SearchIcon,
   People as PeopleIcon,
-  AccessTime as AccessTimeIcon,
   Power as PowerIcon,
   PowerOff as PowerOffIcon,
 } from '@mui/icons-material';
@@ -45,25 +44,33 @@ const DashUserManagement = () => {
   }, [selectedRole]);
 
   useEffect(() => {
-    setFilteredUsers(
-      users.filter(
-        (user) =>
-          (user.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (user.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (user.department || '').toLowerCase().includes(searchTerm.toLowerCase())
-      )
+    let filtered = users;
+    if (selectedRole !== 'all') {
+      filtered = users.filter(user => user.role === selectedRole);
+    }
+    filtered = filtered.filter(
+      (user) =>
+        (user.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (user.email || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
-  }, [searchTerm, users]);
+    setFilteredUsers(filtered);
+  }, [searchTerm, users, selectedRole]);
 
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const endpoint = selectedRole === 'all' ? `${API_URL}/users` : `${API_URL}/technicians`;
-      const res = await axios.get(endpoint);
-      const usersData = res.data.data || res.data;
+      const res = await axios.get(`${API_URL}/users`);
+      let usersData = res.data.data || res.data;
+      console.log('Raw API response:', usersData);
+
+      usersData = usersData.map(user => ({
+        ...user,
+        assignedSiteNames: user.assignedSites?.map(site => site.site_reference || site.name || 'Unknown Site') || [],
+      }));
       setUsers(usersData);
     } catch (err) {
       showSnackbar('Failed to fetch users', 'error');
+      console.error('Error fetching users:', err.response?.data || err.message);
     } finally {
       setLoading(false);
     }
@@ -74,11 +81,12 @@ const DashUserManagement = () => {
     try {
       const res = await axios.put(`${API_URL}/technicians/${id}/activate`, {});
       showSnackbar(res.data.message || 'Technician activated successfully', 'success');
-      fetchUsers();
+      await fetchUsers();
     } catch (err) {
       const errorMessage = err.response?.data?.message || 'Failed to activate technician';
-      const errorDetails = err.response?.data?.error ? `: ${err.response.data.error}` : '';
+      const errorDetails = err.response?.data?.details ? `: ${err.response.data.details.join(', ')}` : '';
       showSnackbar(`${errorMessage}${errorDetails}`, 'error');
+      console.error('Error activating technician:', err.response || err);
     } finally {
       setLoading(false);
     }
@@ -90,11 +98,12 @@ const DashUserManagement = () => {
     try {
       const res = await axios.put(`${API_URL}/technicians/${id}/deactivate`, {});
       showSnackbar(res.data.message || 'Technician deactivated successfully', 'success');
-      fetchUsers();
+      await fetchUsers();
     } catch (err) {
       const errorMessage = err.response?.data?.message || 'Failed to deactivate technician';
-      const errorDetails = err.response?.data?.error ? `: ${err.response.data.error}` : '';
+      const errorDetails = err.response?.data?.details ? `: ${err.response.data.details.join(', ')}` : '';
       showSnackbar(`${errorMessage}${errorDetails}`, 'error');
+      console.error('Error deactivating technician:', err.response || err);
     } finally {
       setLoading(false);
     }
@@ -106,18 +115,6 @@ const DashUserManagement = () => {
 
   const handleCloseSnackbar = () => {
     setSnackbar({ ...snackbar, open: false });
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    try {
-      return new Date(dateString).toLocaleString('en-US', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-      });
-    } catch {
-      return 'N/A';
-    }
   };
 
   return (
@@ -175,7 +172,7 @@ const DashUserManagement = () => {
           </FormControl>
           <TextField
             size="small"
-            placeholder="Search by name, email, or department"
+            placeholder="Search by name or email"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             InputProps={{
@@ -190,7 +187,6 @@ const DashUserManagement = () => {
         </Box>
       </Box>
 
-      {/* Users Table */}
       <Paper sx={{ p: 2, mt: 3, boxShadow: 3 }}>
         {loading ? (
           <Box sx={{ p: 4, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
@@ -203,15 +199,8 @@ const DashUserManagement = () => {
                 <TableCell sx={{ color: 'common.white', fontWeight: 'bold' }}>Name</TableCell>
                 <TableCell sx={{ color: 'common.white', fontWeight: 'bold' }}>Email</TableCell>
                 <TableCell sx={{ color: 'common.white', fontWeight: 'bold' }}>Role</TableCell>
-                <TableCell sx={{ color: 'common.white', fontWeight: 'bold' }}>Department</TableCell>
                 <TableCell sx={{ color: 'common.white', fontWeight: 'bold' }}>Status</TableCell>
-                <TableCell sx={{ color: 'common.white', fontWeight: 'bold' }}>Sites</TableCell>
-                <TableCell sx={{ color: 'common.white', fontWeight: 'bold' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <AccessTimeIcon fontSize="small" />
-                    Last Login
-                  </Box>
-                </TableCell>
+                <TableCell sx={{ color: 'common.white', fontWeight: 'bold' }}>Assigned Sites</TableCell>
                 <TableCell sx={{ color: 'common.white', fontWeight: 'bold' }} align="right">Actions</TableCell>
               </TableRow>
             </TableHead>
@@ -234,7 +223,6 @@ const DashUserManagement = () => {
                         size="small"
                       />
                     </TableCell>
-                    <TableCell>{user.department || 'N/A'}</TableCell>
                     <TableCell>
                       <Chip
                         label={user.isActive ? 'Active' : 'Inactive'}
@@ -243,9 +231,10 @@ const DashUserManagement = () => {
                       />
                     </TableCell>
                     <TableCell>
-                      {user.assignedSites?.length || 0} Site(s)
+                      {user.assignedSiteNames?.length > 0
+                        ? user.assignedSiteNames.join(', ')
+                        : 'No Sites'}
                     </TableCell>
-                    <TableCell>{formatDate(user.lastLogin)}</TableCell>
                     <TableCell align="right">
                       {user.role === 'technician' && (
                         <>
@@ -272,7 +261,7 @@ const DashUserManagement = () => {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
+                  <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
                     <Typography color="text.secondary">No users found</Typography>
                   </TableCell>
                 </TableRow>
@@ -282,7 +271,6 @@ const DashUserManagement = () => {
         )}
       </Paper>
 
-      {/* Snackbar for notifications */}
       <Snackbar
         open={snackbar.open}
         autoHideDuration={4000}
