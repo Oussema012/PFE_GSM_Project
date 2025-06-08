@@ -5,16 +5,14 @@ import { FiPlus, FiX, FiEdit, FiTrash2, FiCheckCircle, FiAlertCircle, FiEye, FiR
 // Validate MongoDB ObjectId (24-character hex string)
 const isValidObjectId = (id) => /^[0-9a-fA-F]{24}$/.test(id);
 
-// Fallback static equipment options for testing (replace with API call)
+// Fallback static equipment options for testing
 const fallbackEquipmentOptions = [
   { equipment_id: 'eq001', name: 'Antenna A', type: 'Antenna' },
   { equipment_id: 'eq002', name: 'Generator B', type: 'Generator' },
   { equipment_id: 'eq003', name: 'Router C', type: 'Router' },
-  
 ];
 
 const ViewSiteDetails = ({ isOpen, onClose, site }) => {
-  // State for modals, form data, equipment list, and messages
   const [showAddEquipmentModal, setShowAddEquipmentModal] = useState(false);
   const [showEditEquipmentModal, setShowEditEquipmentModal] = useState(null);
   const [showDeleteEquipmentModal, setShowDeleteEquipmentModal] = useState(null);
@@ -28,7 +26,7 @@ const ViewSiteDetails = ({ isOpen, onClose, site }) => {
   const [equipmentList, setEquipmentList] = useState([]);
   const [equipmentOptions, setEquipmentOptions] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [loadingOptions, setLoadingOptions] = useState(false); // 👈 Add this state
+  const [loadingOptions, setLoadingOptions] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
@@ -42,8 +40,19 @@ const ViewSiteDetails = ({ isOpen, onClose, site }) => {
         return;
       }
       const response = await axios.get(`http://localhost:8000/api/equipment/${siteId}`);
-      setEquipmentList(response.data);
+      console.log('Equipment List Response:', response.data);
+      const transformedData = response.data.map(item => ({
+        ...item,
+        equipment_id: item.equipment_id || item._id,
+        name: item.name || 'N/A',
+      }));
+      setEquipmentList(transformedData);
     } catch (err) {
+      console.error('Fetch Equipment Error:', {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status,
+      });
       if (err.response?.status === 404) {
         setError('No equipment found for this site.');
       } else if (err.response?.status === 500) {
@@ -57,34 +66,31 @@ const ViewSiteDetails = ({ isOpen, onClose, site }) => {
   };
 
   // Fetch equipment options for the dropdown
-const fetchEquipmentOptions = async () => {
-  setLoadingOptions(true);
-  setError('');
-  try {
-    const response = await axios.get('http://localhost:8000/api/equipment/options');
-    console.log('Equipment Options Response:', response.data);
-    if (response.data.length === 0) {
-      console.log('API returned empty array, using fallback');
-      console.log('Setting fallbackEquipmentOptions:', fallbackEquipmentOptions);
+  const fetchEquipmentOptions = async () => {
+    setLoadingOptions(true);
+    setError('');
+    try {
+      const response = await axios.get('http://localhost:8000/api/equipment/options');
+      console.log('Equipment Options Response:', response.data);
+      if (response.data.length === 0) {
+        console.log('API returned empty array, using fallback');
+        setError('No equipment options available. Contact the administrator.');
+        setEquipmentOptions(fallbackEquipmentOptions);
+      } else {
+        setEquipmentOptions(response.data);
+      }
+    } catch (err) {
+      console.error('Fetch Equipment Options Error:', {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status,
+      });
+      setError('Failed to fetch equipment options. Using fallback options.');
       setEquipmentOptions(fallbackEquipmentOptions);
-      setError('No equipment options returned from server, using fallback options');
-    } else {
-      setEquipmentOptions(response.data);
+    } finally {
+      setLoadingOptions(false);
     }
-  } catch (err) {
-    console.error('Fetch Equipment Options Error:', {
-      message: err.message,
-      response: err.response?.data,
-      status: err.response?.status
-    });
-    console.log('Setting fallbackEquipmentOptions on error:', fallbackEquipmentOptions);
-    setError('Failed to fetch equipment options: ' + (err.response?.data?.message || err.message));
-    setEquipmentOptions(fallbackEquipmentOptions);
-    console.log('Applied Fallback equipmentOptions:', fallbackEquipmentOptions);
-  } finally {
-    setLoadingOptions(false);
-  }
-};
+  };
 
   // Update siteId and fetch equipment/options when site changes
   useEffect(() => {
@@ -137,7 +143,7 @@ const fetchEquipmentOptions = async () => {
       setTimeout(() => setSuccessMessage(''), 3000);
       setShowAddEquipmentModal(false);
       setEquipmentFormData({ equipment_id: '', name: '', type: '', status: '', siteId: site._id });
-      fetchEquipment(site._id); // Refresh equipment list
+      fetchEquipment(site._id);
     } catch (err) {
       if (err.response?.status === 400) {
         const message = err.response?.data?.message || 'Invalid input';
@@ -177,7 +183,7 @@ const fetchEquipmentOptions = async () => {
       setTimeout(() => setSuccessMessage(''), 3000);
       setShowEditEquipmentModal(null);
       setEquipmentFormData({ equipment_id: '', name: '', type: '', status: '', siteId: site._id });
-      fetchEquipment(site._id); // Refresh equipment list
+      fetchEquipment(site._id);
     } catch (err) {
       if (err.response?.status === 400) {
         setError('Invalid input: ' + err.response.data.message);
@@ -199,7 +205,7 @@ const fetchEquipmentOptions = async () => {
       setSuccessMessage('Equipment deleted successfully');
       setTimeout(() => setSuccessMessage(''), 3000);
       setShowDeleteEquipmentModal(null);
-      fetchEquipment(site._id); // Refresh equipment list
+      fetchEquipment(site._id);
     } catch (err) {
       if (err.response?.status === 404) {
         setError('Equipment not found.');
@@ -242,7 +248,6 @@ const fetchEquipmentOptions = async () => {
             <FiX className="h-5 w-5" />
           </button>
         </div>
-        {/* Success Message */}
         {successMessage && (
           <div className="mb-4 p-4 bg-green-50 border-l-4 border-green-400 rounded">
             <div className="flex">
@@ -255,7 +260,6 @@ const fetchEquipmentOptions = async () => {
             </div>
           </div>
         )}
-        {/* Error Message */}
         {error && (
           <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-400 rounded">
             <div className="flex">
@@ -268,7 +272,6 @@ const fetchEquipmentOptions = async () => {
             </div>
           </div>
         )}
-        {/* Site Details */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <div>
             <label className="block text-sm font-medium text-gray-700">Site Reference</label>
@@ -325,13 +328,13 @@ const fetchEquipmentOptions = async () => {
             </p>
           </div>
         </div>
-        {/* Equipment Table */}
         <div className="space-y-4">
           <div className="flex justify-between items-center mb-2">
             <label className="block text-sm font-medium text-gray-700">Equipment</label>
             <button
               onClick={() => setShowAddEquipmentModal(true)}
               className="flex items-center px-3 py-1 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm"
+              disabled={equipmentOptions.length === 0}
             >
               <FiPlus className="mr-1 h-4 w-4" />
               Add Equipment
@@ -358,7 +361,7 @@ const fetchEquipmentOptions = async () => {
                   {equipmentList.map((eq) => (
                     <tr key={eq._id} className="hover:bg-gray-50">
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{eq.equipment_id}</td>
-                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">{eq.name}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">{eq.name || 'N/A'}</td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">{eq.type || 'N/A'}</td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
                         <span
@@ -400,88 +403,84 @@ const fetchEquipmentOptions = async () => {
             <p className="text-sm text-gray-500">No equipment found for this site.</p>
           )}
         </div>
-
-        {/* Add Equipment Modal */}
-{showAddEquipmentModal && (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 animate-fade-in">
-    <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full transform transition-all animate-scale-in">
-      <div className="flex items-center mb-4">
-        <FiPlus className="h-6 w-6 text-indigo-600 mr-2" />
-        <h3 className="text-lg font-semibold text-gray-900">Add Equipment</h3>
-      </div>
-      {loadingOptions ? (
-        <div className="flex justify-center items-center p-4">
-          <FiRefreshCw className="animate-spin h-6 w-6 text-indigo-600" />
-          <span className="ml-2 text-sm text-gray-600">Loading equipment options...</span>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {error && (
-            <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-400 rounded">
-              <div className="flex">
-                <FiAlertCircle className="h-5 w-5 text-red-400" />
-                <p className="ml-3 text-sm text-red-700">{error}</p>
+        {showAddEquipmentModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 animate-fade-in">
+            <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full transform transition-all animate-scale-in">
+              <div className="flex items-center mb-4">
+                <FiPlus className="h-6 w-6 text-indigo-600 mr-2" />
+                <h3 className="text-lg font-semibold text-gray-900">Add Equipment</h3>
+              </div>
+              {loadingOptions ? (
+                <div className="flex justify-center items-center p-4">
+                  <FiRefreshCw className="animate-spin h-6 w-6 text-indigo-600" />
+                  <span className="ml-2 text-sm text-gray-600">Loading equipment options...</span>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {error && (
+                    <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-400 rounded">
+                      <div className="flex">
+                        <FiAlertCircle className="h-5 w-5 text-red-400" />
+                        <p className="ml-3 text-sm text-red-700">{error}</p>
+                      </div>
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Equipment</label>
+                    <select
+                      name="equipment_id"
+                      value={equipmentFormData.equipment_id}
+                      onChange={handleEquipmentInputChange}
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500"
+                    >
+                      <option value="">Select equipment</option>
+                      {equipmentOptions.length > 0 ? (
+                        equipmentOptions.map((equipment) => (
+                          <option key={equipment.equipment_id} value={equipment.equipment_id}>
+                            {equipment.name} ({equipment.type})
+                          </option>
+                        ))
+                      ) : (
+                        <option value="" disabled>
+                          No equipment options available
+                        </option>
+                      )}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Status</label>
+                    <select
+                      name="status"
+                      value={equipmentFormData.status}
+                      onChange={handleEquipmentInputChange}
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500"
+                    >
+                      <option value="">Select status</option>
+                      <option value="operational">Operational</option>
+                      <option value="faulty">Faulty</option>
+                      <option value="maintenance">Maintenance</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowAddEquipmentModal(false)}
+                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={addEquipment}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  disabled={loadingOptions}
+                >
+                  Add
+                </button>
               </div>
             </div>
-          )}
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Equipment</label>
-            <select
-              name="equipment_id"
-              value={equipmentFormData.equipment_id}
-              onChange={handleEquipmentInputChange}
-              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500"
-            >
-              <option value="">Select equipment</option>
-              {equipmentOptions.length > 0 ? (
-                equipmentOptions.map((equipment) => (
-                  <option key={equipment.equipment_id} value={equipment.equipment_id}>
-                    {equipment.name} ({equipment.type})
-                  </option>
-                ))
-              ) : (
-                <option value="" disabled>
-                  No equipment options available
-                </option>
-              )}
-            </select>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Status</label>
-            <select
-              name="status"
-              value={equipmentFormData.status}
-              onChange={handleEquipmentInputChange}
-              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500"
-            >
-              <option value="">Select status</option>
-              <option value="operational">Operational</option>
-              <option value="faulty">Faulty</option>
-              <option value="maintenance">Maintenance</option>
-            </select>
-          </div>
-        </div>
-      )}
-      <div className="mt-6 flex justify-end space-x-3">
-        <button
-          onClick={() => setShowAddEquipmentModal(false)}
-          className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={addEquipment}
-          className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          disabled={loadingOptions}
-        >
-          Add
-        </button>
-      </div>
-    </div>
-  </div>
-)}
-
-        {/* Edit Equipment Modal */}
+        )}
         {showEditEquipmentModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 animate-fade-in">
             <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full transform transition-all animate-scale-in">
@@ -556,8 +555,6 @@ const fetchEquipmentOptions = async () => {
             </div>
           </div>
         )}
-
-        {/* Delete Equipment Confirmation Modal */}
         {showDeleteEquipmentModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 animate-fade-in">
             <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full transform transition-all animate-scale-in">

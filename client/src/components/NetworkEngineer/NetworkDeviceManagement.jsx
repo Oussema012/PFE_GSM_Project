@@ -10,7 +10,7 @@ const NetworkDeviceManagement = () => {
   const [loading, setLoading] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [currentSite, setCurrentSite] = useState(null);
-  const [equipmentData, setEquipmentData] = useState({}); // Store equipment for each site
+  const [equipmentData, setEquipmentData] = useState({});
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -18,76 +18,80 @@ const NetworkDeviceManagement = () => {
   }, []);
 
   // Fetch sites and their equipment
-const fetchSites = async () => {
-  setLoading(true);
-  setError('');
-  try {
-    const response = await axios.get('/api/sites?_=' + new Date().getTime()); // Cache-busting
-    console.log('Raw API Response:', response.data); // Log raw data for debugging
-    const normalizedSites = response.data.map((site) => {
-      const normalized = {
-        ...site,
-        location: {
-          address: site.address || '',
-          region: site.region || '',
-          lat: site.location?.lat || 0,
-          lon: site.location?.lon || 0,
-        },
-        technology: Array.isArray(site.technology) ? site.technology : [],
-        status: site.status || 'unknown',
-        power_status: site.power_status || 'unknown',
-        battery_level: site.battery_level || 0,
-        site_id: site.site_id || '',
-        site_reference: site.site_reference || '',
-        site_type: site.site_type || '',
-        temperature: site.temperature || 0,
-        last_updated: site.last_updated || null,
-        alarms: Array.isArray(site.alarms) ? site.alarms : [],
-        controller_id: site.controller_id || '',
-        vendor: site.vendor || '',
-        ac_status: site.ac_status || '',
-        reference: site.reference || '',
-        created_at: site.created_at || null,
-        equipment_status: site.equipment_status || 'unknown',
-        humidity: site.humidity || 0,
-        last_temperature: site.last_temperature || 0,
-        signal_strength: site.signal_strength || 0,
-        voltage_level: site.voltage_level || 0,
-        ac_on_timestamp: site.ac_on_timestamp || 0,
-      };
-      console.log(`Normalized Site ${site.name}:`, normalized); // Log normalized data
-      return normalized;
-    });
-    setSites(normalizedSites);
+  const fetchSites = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const response = await axios.get('/api/sites?_=' + new Date().getTime());
+      console.log('Raw API Response:', response.data);
+      const normalizedSites = response.data.map((site, index) => {
+        const normalized = {
+          ...site,
+          location: {
+            address: site.address || '',
+            region: site.region || '',
+            lat: site.location?.lat || 0,
+            lon: site.location?.lon || 0,
+          },
+          technology: Array.isArray(site.technology) ? site.technology : [],
+          status: site.status || 'unknown',
+          power_status: site.power_status || 'unknown',
+          battery_level: Number.isFinite(site.battery_level) ? Math.min(Math.max(site.battery_level, 0), 100) : 0,
+          site_id: site.site_id || '',
+          site_reference: site.site_reference || `SITE_${index + 1}`,
+          site_type: site.site_type || '',
+          temperature: site.temperature || 0,
+          last_updated: site.last_updated || null,
+          alarms: Array.isArray(site.alarms) ? site.alarms : [],
+          controller_id: site.controller_id || '',
+          vendor: site.vendor || '',
+          ac_status: site.ac_status || '',
+          reference: site.reference || '',
+          created_at: site.created_at || null,
+          equipment_status: site.equipment_status || 'unknown',
+          humidity: site.humidity || 0,
+          last_temperature: site.last_temperature || 0,
+          signal_strength: site.signal_strength || 0,
+          voltage_level: site.voltage_level || 0,
+          ac_on_timestamp: site.ac_on_timestamp || 0,
+        };
+        console.log(`Normalized Site ${site.name || normalized.site_reference}:`, normalized);
+        return normalized;
+      });
+      setSites(normalizedSites);
 
-    // Fetch equipment for each site
-    const equipmentPromises = normalizedSites.map(async (site) => {
-      if (!isValidObjectId(site._id)) {
-        console.warn(`Invalid site ID format for site ${site.name}: ${site._id}`);
-        return { siteId: site._id, equipment: [] };
-      }
-      try {
-        const equipmentResponse = await axios.get(`http://localhost:8000/api/equipment/${site._id}`);
-        return { siteId: site._id, equipment: equipmentResponse.data };
-      } catch (err) {
-        console.error(`Failed to fetch equipment for site ${site._id}:`, err.message);
-        return { siteId: site._id, equipment: [] };
-      }
-    });
+      // Fetch equipment for each site
+      const equipmentPromises = normalizedSites.map(async (site) => {
+        if (!isValidObjectId(site._id)) {
+          console.warn(`Invalid site ID format for site ${site.name || site.site_reference}: ${site._id}`);
+          return { siteId: site._id, equipment: [] };
+        }
+        try {
+          const equipmentResponse = await axios.get(`http://localhost:8000/api/equipment/${site._id}`);
+          // Deduplicate equipment by _id
+          const uniqueEquipment = Array.from(
+            new Map(equipmentResponse.data.map((eq) => [eq._id, eq])).values()
+          );
+          return { siteId: site._id, equipment: uniqueEquipment };
+        } catch (err) {
+          console.error(`Failed to fetch equipment for site ${site._id}:`, err.message);
+          return { siteId: site._id, equipment: [] };
+        }
+      });
 
-    const equipmentResults = await Promise.all(equipmentPromises);
-    const equipmentMap = equipmentResults.reduce((acc, { siteId, equipment }) => {
-      acc[siteId] = equipment;
-      return acc;
-    }, {});
-    setEquipmentData(equipmentMap);
-  } catch (error) {
-    setError(`Failed to fetch sites: ${error.message}`);
-    console.error('Fetch Sites Error:', error);
-  } finally {
-    setLoading(false);
-  }
-};
+      const equipmentResults = await Promise.all(equipmentPromises);
+      const equipmentMap = equipmentResults.reduce((acc, { siteId, equipment }) => {
+        acc[siteId] = equipment;
+        return acc;
+      }, {});
+      setEquipmentData(equipmentMap);
+    } catch (error) {
+      setError(`Failed to fetch sites: ${error.message}`);
+      console.error('Fetch Sites Error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleView = (site) => {
     setCurrentSite(site);
@@ -101,7 +105,7 @@ const fetchSites = async () => {
         alert('Site deleted successfully');
         fetchSites();
       } catch (error) {
-        alert(`Failed to delete site: ${error.message}`);
+        alert(`Failed to delete site: ${error.response?.data?.message || error.message}`);
       }
     }
   };
@@ -111,30 +115,41 @@ const fetchSites = async () => {
     inactive: 'bg-gray-100 text-gray-800',
     maintenance: 'bg-yellow-100 text-yellow-800',
     offline: 'bg-red-100 text-red-800',
+    unknown: 'bg-gray-100 text-gray-800',
+  };
+
+  const powerStatusColors = {
+    ok: 'bg-green-100 text-green-800',
+    good: 'bg-green-100 text-green-800',
+    warning: 'bg-yellow-100 text-yellow-800',
+    critical: 'bg-red-100 text-red-800',
+    unknown: 'bg-gray-100 text-gray-800',
   };
 
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Network Device Management</h1>
+        <button
+          onClick={fetchSites}
+          className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded transition-colors duration-200"
+        >
+          Refresh Data
+        </button>
       </div>
 
       {/* Error Message */}
       {error && (
-        <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-400 rounded">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fillRule="evenodd"
-                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <p className="text-sm text-red-700">{error}</p>
-            </div>
+        <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-400 rounded-lg shadow-sm">
+          <div className="flex items-center">
+            <svg className="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+              <path
+                fillRule="evenodd"
+                d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                clipRule="evenodd"
+              />
+            </svg>
+            <p className="ml-3 text-sm text-red-700">{error}</p>
           </div>
         </div>
       )}
@@ -174,112 +189,146 @@ const fetchSites = async () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {sites.map((site) => (
-                  <tr key={site._id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {site.name || 'N/A'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          statusColors[site.status] || 'bg-gray-100 text-gray-800'
-                        }`}
-                      >
-                        {site.status || 'N/A'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {site.location?.address && site.location?.region
-                        ? `${site.location.address}, ${site.location.region}`
-                        : 'N/A'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      <div className="flex flex-wrap gap-1">
-                        {site.technology.length > 0 ? (
-                          site.technology.map((tech, index) => (
-                            <span
-                              key={index}
-                              className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded"
-                            >
-                              {tech}
-                            </span>
-                          ))
-                        ) : (
-                          <span>N/A</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {site.power_status ? `${site.power_status} (${site.battery_level}%)` : 'N/A'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      <div className="flex flex-wrap gap-2">
-                        {equipmentData[site._id]?.length > 0 ? (
-                          equipmentData[site._id].map((eq) => (
-                            <div key={eq._id} className="flex items-center">
+                {sites.length > 0 ? (
+                  sites.map((site) => (
+                    <tr key={site._id} className="hover:bg-gray-50 transition-colors duration-150">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {site.name || 'Unnamed Site'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span
+                          className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            statusColors[site.status.toLowerCase()] || 'bg-gray-100 text-gray-800'
+                          }`}
+                        >
+                          {site.status ? site.status.charAt(0).toUpperCase() + site.status.slice(1) : 'Unknown'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {site.location?.address && site.location?.region
+                          ? `${site.location.address}, ${site.location.region}`
+                          : 'Unknown Location'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <div className="flex flex-wrap gap-1">
+                          {site.technology.length > 0 ? (
+                            site.technology.map((tech, index) => (
                               <span
-                                className={`inline-block w-3 h-3 rounded-full mr-1 ${
-                                  eq.status === 'operational'
-                                    ? 'bg-green-500'
-                                    : eq.status === 'faulty'
-                                    ? 'bg-red-500'
-                                    : eq.status === 'maintenance'
-                                    ? 'bg-yellow-500'
-                                    : 'bg-gray-500'
+                                key={index}
+                                className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full"
+                              >
+                                {tech}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-gray-500">No Technology</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <div className="flex items-center space-x-2">
+                          <span
+                            className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                              powerStatusColors[site.power_status.toLowerCase()] || 'bg-gray-100 text-gray-800'
+                            }`}
+                            title={`Power Status: ${site.power_status || 'unknown'}`}
+                          >
+                            {site.power_status ? site.power_status.charAt(0).toUpperCase() + site.power_status.slice(1) : 'Unknown'}
+                          </span>
+                          {Number.isFinite(site.battery_level) && (
+                            <div className="w-16 bg-gray-200 rounded-full h-2.5 overflow-hidden">
+                              <div
+                                className={`h-2.5 rounded-full transition-all duration-300 ${
+                                  site.battery_level > 50 ? 'bg-green-500' :
+                                  site.battery_level > 20 ? 'bg-yellow-500' : 'bg-red-500'
                                 }`}
-                                title={`Equipment: ${eq.name} (Status: ${eq.status})`}
-                              ></span>
-                              <span>{eq.name}</span>
+                                style={{ width: `${site.battery_level}%` }}
+                              ></div>
                             </div>
-                          ))
-                        ) : (
-                          <span>N/A</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => handleView(site)}
-                          className="text-gray-600 hover:text-gray-900"
-                          title="View"
-                        >
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            className="h-5 w-5"
-                            viewBox="0 0 20 20"
-                            fill="currentColor"
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          {Number.isFinite(site.battery_level) ? `${site.battery_level}%` : 'N/A'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <div className="flex flex-wrap gap-2">
+                          {equipmentData[site._id]?.length > 0 ? (
+                            equipmentData[site._id].map((eq) => (
+                              <div key={eq._id} className="flex items-center">
+                                <span
+                                  className={`inline-block w-3 h-3 rounded-full mr-1 ${
+                                    eq.status === 'operational'
+                                      ? 'bg-green-500'
+                                      : eq.status === 'faulty'
+                                      ? 'bg-red-500'
+                                      : eq.status === 'maintenance'
+                                      ? 'bg-yellow-500'
+                                      : 'bg-gray-500'
+                                  }`}
+                                  title={`Equipment: ${eq.name || 'Unnamed'} (Status: ${eq.status || 'unknown'})`}
+                                ></span>
+                                <span>{eq.name || 'Unnamed Equipment'}</span>
+                              </div>
+                            ))
+                          ) : (
+                            <span className="text-gray-500">No Equipment</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => handleView(site)}
+                            className="text-blue-600 hover:text-blue-800 p-1 rounded hover:bg-blue-50 transition-colors duration-200"
+                            title="View Details"
                           >
-                            <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-                            <path
-                              fillRule="evenodd"
-                              d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => handleDelete(site._id)}
-                          className="text-red-600 hover:text-red-900"
-                          title="Delete"
-                        >
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            className="h-5 w-5"
-                            viewBox="0 0 20 20"
-                            fill="currentColor"
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              className="h-5 w-5"
+                              viewBox="0 0 20 20"
+                              fill="currentColor"
+                            >
+                              <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                              <path
+                                fillRule="evenodd"
+                                d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
+                                clipRule="evenodd"
+                              />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => handleDelete(site._id)}
+                            className="text-red-600 hover:text-red-900 p-1 rounded hover:bg-red-50 transition-colors duration-200"
+                            title="Delete Site"
                           >
-                            <path
-                              fillRule="evenodd"
-                              d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                        </button>
-                      </div>
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              className="h-5 w-5"
+                              viewBox="0 0 20 20"
+                              fill="currentColor"
+                            >
+                              <path
+                                fillRule="evenodd"
+                                d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
+                                clipRule="evenodd"
+                              />
+                            </svg>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td
+                      colSpan="7"
+                      className="px-6 py-4 text-center text-sm text-gray-500"
+                    >
+                      No sites found
                     </td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>

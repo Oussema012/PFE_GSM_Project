@@ -1,22 +1,32 @@
 const mongoose = require('mongoose');
 const Site = require('../models/Site');
 const User = require('../models/User');
+const Alert = require('../models/Alert'); // Assumed to exist
+
+// Mock equipment data (replace with actual Equipment model if available)
+const fetchEquipment = async (siteId) => {
+  // This is a placeholder. Implement your actual equipment fetch logic.
+  const equipment = [
+    { _id: new mongoose.Types.ObjectId(), name: 'Antenna A', type: 'Antenna', status: 'operational' },
+    { _id: new mongoose.Types.ObjectId(), name: 'Generator B', type: 'Generator', status: 'operational' },
+    { _id: new mongoose.Types.ObjectId(), name: 'Router C', type: 'Router', status: 'maintenance' },
+  ];
+  return Array.from(new Map(equipment.map((eq) => [eq._id, eq])).values());
+};
 
 // Controller to fetch all sites
 exports.getSites = async (req, res) => {
   try {
     const sites = await Site.find().lean();
-    res.status(200).json(sites);
-  } catch (error) {
-    console.error('Error fetching sites:', error);
-    res.status(500).json({ message: 'Error fetching sites', error: error.message });
-  }
-};
-
-exports.getAllSites = async (req, res) => {
-  try {
-    const sites = await Site.find().select('site_reference name location _id').lean();
-    res.status(200).json(sites);
+    const enrichedSites = sites.map((site) => ({
+      ...site,
+      site_reference: site.site_reference || `SITE_${site._id.toString().slice(-4)}`,
+      address: site.address || 'Unknown Address',
+      technology: Array.isArray(site.technology) ? site.technology : [],
+      power_status: site.power_status || 'unknown',
+      battery_level: Number.isFinite(site.battery_level) ? site.battery_level : 0,
+    }));
+    res.status(200).json(enrichedSites);
   } catch (error) {
     console.error('Error fetching sites:', error);
     res.status(500).json({ message: 'Error fetching sites', error: error.message });
@@ -27,17 +37,20 @@ exports.getAllSites = async (req, res) => {
 exports.getSiteById = async (req, res) => {
   try {
     const { id } = req.params;
-
-    // Validate ID
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ message: 'Invalid site ID format' });
     }
-
     const site = await Site.findById(id).lean();
     if (!site) {
       return res.status(404).json({ message: 'Site not found' });
     }
-    res.status(200).json(site);
+    res.status(200).json({
+      ...site,
+      address: site.address || 'Unknown Address',
+      technology: Array.isArray(site.technology) ? site.technology : [],
+      power_status: site.power_status || 'unknown',
+      battery_level: Number.isFinite(site.battery_level) ? site.battery_level : 0,
+    });
   } catch (error) {
     console.error('Error fetching site:', error);
     res.status(500).json({ message: 'Error fetching site', error: error.message });
@@ -52,6 +65,8 @@ exports.createSite = async (req, res) => {
       name,
       status,
       location,
+      address,
+      region,
       technology,
       site_type,
       power_status,
@@ -65,8 +80,8 @@ exports.createSite = async (req, res) => {
     } = req.body;
 
     // Validate required fields
-    if (!site_reference || !name || !status) {
-      return res.status(400).json({ message: 'site_reference, name, and status are required' });
+    if (!site_reference || !name || !status || !address || !region) {
+      return res.status(400).json({ message: 'site_reference, name, status, address, and region are required' });
     }
 
     // Check if site_reference is unique
@@ -76,20 +91,23 @@ exports.createSite = async (req, res) => {
     }
 
     const newSite = new Site({
+      site_id: new mongoose.Types.ObjectId().toString(),
       site_reference,
       name,
       status,
-      location,
-      technology,
-      site_type,
-      power_status,
-      battery_level,
-      temperature,
-      last_updated,
-      alarms,
-      controller_id,
-      vendor,
-      ac_status,
+      location: location || { lat: 0, lon: 0 },
+      address,
+      region,
+      technology: technology || [],
+      site_type: site_type || '',
+      power_status: power_status || 'unknown',
+      battery_level: Number.isFinite(battery_level) ? battery_level : 0,
+      temperature: temperature || 0,
+      last_updated: last_updated || Date.now(),
+      alarms: alarms || [],
+      controller_id: controller_id || '',
+      vendor: vendor || '',
+      ac_status: ac_status || '',
     });
 
     await newSite.save();
@@ -104,13 +122,10 @@ exports.createSite = async (req, res) => {
 exports.updateSite = async (req, res) => {
   try {
     const { id } = req.params;
-
-    // Validate ID
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ message: 'Invalid site ID format' });
     }
 
-    // Prevent updating site_reference to avoid conflicts
     if (req.body.site_reference) {
       const existingSite = await Site.findOne({ site_reference: req.body.site_reference });
       if (existingSite && existingSite._id.toString() !== id) {
@@ -138,8 +153,6 @@ exports.updateSite = async (req, res) => {
 exports.updateSiteStatus = async (req, res) => {
   try {
     const { site_reference, status } = req.body;
-
-    // Validate inputs
     if (!site_reference || !status) {
       return res.status(400).json({ message: 'site_reference and status are required' });
     }
@@ -161,19 +174,13 @@ exports.updateSiteStatus = async (req, res) => {
   }
 };
 
-// Controller to search/filter sites by name or status
+// Controller to search/filter sites
 exports.searchSites = async (req, res) => {
   try {
     const { name, status } = req.query;
     const searchQuery = {};
-
-    if (name) {
-      searchQuery.name = { $regex: name, $options: 'i' }; // Case-insensitive search
-    }
-
-    if (status) {
-      searchQuery.status = status;
-    }
+    if (name) searchQuery.name = { $regex: name, $options: 'i' };
+    if (status) searchQuery.status = status;
 
     const sites = await Site.find(searchQuery).lean();
     res.status(200).json(sites);
@@ -187,13 +194,10 @@ exports.searchSites = async (req, res) => {
 exports.deleteSite = async (req, res) => {
   try {
     const { id } = req.params;
-
-    // Validate ID
     if (!mongoose.Types.ObjectId.isValid(id)) {
-  return res.status(400).json({ message: 'Invalid site ID format' });
-}
+      return res.status(400).json({ message: 'Invalid site ID format' });
+    }
 
-    // Check if site has associated alerts
     const alerts = await Alert.find({ siteId: id });
     if (alerts.length > 0) {
       return res.status(400).json({ message: 'Cannot delete site with associated alerts' });
@@ -215,37 +219,30 @@ exports.deleteSite = async (req, res) => {
 exports.assignTechnicianToSites = async (req, res) => {
   try {
     const { technicianId, siteIds } = req.body;
-
-    // Validate inputs
     if (!technicianId || !siteIds || !Array.isArray(siteIds)) {
       return res.status(400).json({ message: 'technicianId and an array of siteIds are required' });
     }
 
-    // Validate technicianId
     if (!mongoose.Types.ObjectId.isValid(technicianId)) {
       return res.status(400).json({ message: 'Invalid technician ID format' });
     }
 
-    // Validate siteIds
     for (const siteId of siteIds) {
       if (!mongoose.Types.ObjectId.isValid(siteId)) {
         return res.status(400).json({ message: `Invalid site ID format: ${siteId}` });
       }
     }
 
-    // Check if technician exists and has correct role
     const technician = await User.findById(technicianId);
     if (!technician || technician.role !== 'technician') {
       return res.status(404).json({ message: 'Technician not found or invalid role' });
     }
 
-    // Check if all sites exist
     const sites = await Site.find({ _id: { $in: siteIds } });
     if (sites.length !== siteIds.length) {
       return res.status(404).json({ message: 'One or more sites not found' });
     }
 
-    // Update technician's assigned sites
     technician.assignedSites = [...new Set([...technician.assignedSites, ...siteIds])];
     await technician.save();
 
@@ -255,6 +252,8 @@ exports.assignTechnicianToSites = async (req, res) => {
     res.status(500).json({ message: 'Error assigning technician to sites', error: error.message });
   }
 };
+
+// Controller to fetch site references
 exports.getSiteReferences = async (req, res) => {
   try {
     const sites = await Site.find({}, '_id site_reference').lean();
@@ -262,5 +261,20 @@ exports.getSiteReferences = async (req, res) => {
   } catch (error) {
     console.error('Error fetching site references:', error);
     res.status(500).json({ message: 'Error fetching site references', error: error.message });
+  }
+};
+
+// Mock equipment endpoint (replace with actual implementation)
+exports.getEquipmentBySiteId = async (req, res) => {
+  try {
+    const { siteId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(siteId)) {
+      return res.status(400).json({ message: 'Invalid site ID format' });
+    }
+    const equipment = await fetchEquipment(siteId);
+    res.status(200).json(equipment);
+  } catch (error) {
+    console.error('Error fetching equipment:', error);
+    res.status(500).json({ message: 'Error fetching equipment', error: error.message });
   }
 };
