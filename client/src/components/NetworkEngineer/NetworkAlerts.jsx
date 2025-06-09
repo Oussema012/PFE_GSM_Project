@@ -13,11 +13,13 @@ import {
   FiCalendar,
   FiPlus,
   FiTrash2,
+  FiTool,
 } from 'react-icons/fi';
 import CreateAlert from './CreateAlert';
 import DeleteAlert from './DeleteAlert';
 import AcknowledgeAlert from './AcknowledgeAlert';
 import DetailAlert from './DetailAlert';
+import CreateInterventionModal from './CreateInterventionModal';
 
 // Validate site_reference format (e.g., "SITE001")
 const isValidSiteReference = (siteId) => /^[A-Z0-9]+$/.test(siteId);
@@ -38,6 +40,8 @@ const NetworkAlerts = () => {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [resolving, setResolving] = useState(null);
   const [siteReferences, setSiteReferences] = useState([]);
+  const [showScheduleInterventionModal, setShowScheduleInterventionModal] = useState(false);
+  const [selectedAlertForIntervention, setSelectedAlertForIntervention] = useState(null);
 
   axios.defaults.baseURL = 'http://localhost:8000';
 
@@ -94,13 +98,13 @@ const NetworkAlerts = () => {
       } else {
         switch (filter) {
           case 'active':
-            url = '/api/alerts';
+            url = `/api/alerts`;
             break;
           case 'resolved':
             url = `/api/alerts/resolved`;
             break;
           case 'history':
-            url = '/api/alerts/history';
+            url = `/api/alerts/history`;
             break;
           default:
             setError('Invalid filter configuration');
@@ -186,6 +190,18 @@ const NetworkAlerts = () => {
       setError(`Failed to resolve alert: ${err.response?.data?.message || err.message}`);
     } finally {
       setResolving(null);
+    }
+  };
+
+  const scheduleIntervention = async (payload) => {
+    try {
+      const response = await axios.post('/api/interventions', payload);
+      setSuccessMessage('Intervention scheduled successfully');
+      setTimeout(() => setSuccessMessage(''), 3000);
+      setShowScheduleInterventionModal(false);
+      setSelectedAlertForIntervention(null);
+    } catch (error) {
+      setError(error.response?.data?.message || 'Failed to schedule intervention');
     }
   };
 
@@ -275,7 +291,7 @@ const NetworkAlerts = () => {
 
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         {successMessage && (
-          <div className="mb-4 p-4 bg-green-50 border-l-4 border-green-400 rounded">
+          <div className="mb-4 p-4 bg-green-50 border fold-4 border-green-400 rounded">
             <div className="flex">
               <div className="flex-shrink-0">
                 <FiCheckCircle className="h-5 w-5 text-green-400" />
@@ -360,7 +376,9 @@ const NetworkAlerts = () => {
                     className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-3 pr-10 py-2 border border-gray-300 rounded-md"
                     disabled={filter === 'active'}
                   />
-                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                  <div className="absolute inset-y-0 right
+
+-0 flex items-center pr-3 pointer-events-none">
                     <FiCalendar className="text-gray-400" />
                   </div>
                 </div>
@@ -394,6 +412,21 @@ const NetworkAlerts = () => {
           onClose={() => setShowDetailModal(false)}
           alert={selectedAlert}
         />
+
+        {showScheduleInterventionModal && (
+          <CreateInterventionModal
+            isScheduling={true}
+            initialData={{
+              siteId: selectedAlertForIntervention?.siteId || '',
+              alertId: selectedAlertForIntervention?._id || '',
+            }}
+            onClose={() => {
+              setShowScheduleInterventionModal(false);
+              setSelectedAlertForIntervention(null);
+            }}
+            onSubmit={scheduleIntervention}
+          />
+        )}
 
         {loading && (
           <div className="flex justify-center items-center p-8">
@@ -543,6 +576,17 @@ const NetworkAlerts = () => {
                                   ) : (
                                     <FiCheckCircle className="h-5 w-5" />
                                   )}
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedAlertForIntervention(alert);
+                                    setShowScheduleInterventionModal(true);
+                                  }}
+                                  className="flex items-center text-blue-600 hover:text-blue-900"
+                                  title="Schedule Intervention"
+                                >
+                                  <FiTool className="h-5 w-5" />
                                 </button>
                               </>
                             )}

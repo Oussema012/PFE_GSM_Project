@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
+
 const interventionSchema = new Schema({
   siteId: { type: String, required: true },
   description: { type: String, required: true },
@@ -9,15 +10,20 @@ const interventionSchema = new Schema({
     end: { type: String }    // e.g. "11:00"
   },
   technician: {
-  type: mongoose.Schema.Types.ObjectId,
-  ref: 'User',
-  required: true
-},
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
   createdBy: {
-  type: mongoose.Schema.Types.ObjectId,
-  ref: 'User',
-  required: true
-},   
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },   
+  alertId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Alert',
+    required: false // Making it optional, adjust based on your requirements
+  },
   priority: {
     type: String,
     enum: ['low', 'medium', 'high'],
@@ -33,5 +39,6 @@ const interventionSchema = new Schema({
   validatedBy: { type: String },
   createdAt: { type: Date, default: Date.now }
 });
+
 const Intervention = mongoose.model('Intervention', interventionSchema);
 module.exports = Intervention;

@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const Intervention = require('../models/Intervention');
+const Alert = require('../models/Alert');
 const User = require('../models/User');
 
 // Helper to check required fields
@@ -13,7 +14,108 @@ const checkRequired = (fields, res) => {
   return true;
 };
 
-// Create a new intervention
+// Resolve an intervention and update associated alert
+exports.resolveIntervention = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { resolutionNotes, validatedBy } = req.body;
+
+    // Validate intervention ID
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid intervention ID format'
+      });
+    }
+
+    // Validate required fields
+    if (!checkRequired({ resolutionNotes, validatedBy }, res)) {
+      return;
+    }
+
+    // Update intervention
+    const intervention = await Intervention.findByIdAndUpdate(
+      id,
+      {
+        status: 'completed',
+        resolutionNotes,
+        validatedBy,
+        resolvedAt: new Date(),
+      },
+      { new: true, runValidators: true }
+    )
+      .populate('technician', 'name email')
+      .populate('createdBy', 'name email');
+
+    if (!intervention) {
+      return res.status(404).json({
+        success: false,
+        message: 'Intervention not found'
+      });
+    }
+
+    // Check if intervention has an associated alert
+    if (intervention.alertId && mongoose.isValidObjectId(intervention.alertId)) {
+      try {
+        const alert = await Alert.findByIdAndUpdate(
+          intervention.alertId,
+          {
+            status: 'resolved',
+            resolvedAt: new Date(),
+          },
+          { new: true, runValidators: true }
+        );
+
+        if (!alert) {
+          // Rollback intervention update if alert not found
+          await Intervention.findByIdAndUpdate(
+            id,
+            {
+              status: 'planned', // Revert to original status (adjust based on your logic)
+              resolutionNotes: null,
+              validatedBy: null,
+              resolvedAt: null,
+            },
+            { runValidators: true }
+          );
+          return res.status(404).json({
+            success: false,
+            message: 'Associated alert not found'
+          });
+        }
+      } catch (alertError) {
+        // Rollback intervention update on alert update error
+        await Intervention.findByIdAndUpdate(
+          id,
+          {
+            status: 'planned',
+            resolutionNotes: null,
+            validatedBy: null,
+            resolvedAt: null,
+          },
+          { runValidators: true }
+        );
+        throw alertError;
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Intervention resolved successfully',
+      data: intervention
+    });
+
+  } catch (error) {
+    console.error('Error resolving intervention:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error resolving intervention',
+      error: error.message
+    });
+  }
+};
+
+// Other controller functions (unchanged, included for completeness)
 exports.createIntervention = async (req, res) => {
   try {
     const {
@@ -27,7 +129,8 @@ exports.createIntervention = async (req, res) => {
       status,
       resolutionNotes,
       resolvedAt,
-      validatedBy
+      validatedBy,
+      alertId
     } = req.body;
 
     // Basic input validation
@@ -72,6 +175,14 @@ exports.createIntervention = async (req, res) => {
       });
     }
 
+    // Validate alertId if provided
+    if (alertId && !mongoose.isValidObjectId(alertId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid alertId format'
+      });
+    }
+
     // Create new intervention
     const intervention = new Intervention({
       siteId,
@@ -85,6 +196,7 @@ exports.createIntervention = async (req, res) => {
       resolutionNotes,
       resolvedAt: resolvedAt ? new Date(resolvedAt) : undefined,
       validatedBy,
+      alertId,
       createdAt: new Date()
     });
 
@@ -107,7 +219,6 @@ exports.createIntervention = async (req, res) => {
   }
 };
 
-// Get interventions by creator
 exports.getInterventionsByCreator = async (req, res) => {
   try {
     const { createdBy } = req.query;
@@ -155,7 +266,7 @@ exports.getInterventionsByCreator = async (req, res) => {
     });
   }
 };
-// Get interventions by technician
+
 exports.getInterventionsByTechnician = async (req, res) => {
   try {
     const { technician } = req.query;
@@ -203,7 +314,7 @@ exports.getInterventionsByTechnician = async (req, res) => {
     });
   }
 };
-// Update intervention status
+
 exports.updateInterventionStatus = async (req, res) => {
   try {
     const { id } = req.params;
@@ -268,62 +379,7 @@ exports.updateInterventionStatus = async (req, res) => {
     });
   }
 };
-// Resolve an intervention
-exports.resolveIntervention = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { resolutionNotes, validatedBy } = req.body;
 
-    // Validate intervention ID
-    if (!mongoose.isValidObjectId(id)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid intervention ID format'
-      });
-    }
-
-    // Validate required fields
-    if (!checkRequired({ resolutionNotes, validatedBy }, res)) {
-      return;
-    }
-
-    // Find and update intervention
-    const intervention = await Intervention.findByIdAndUpdate(
-      id,
-      {
-        status: 'completed',
-        resolutionNotes,
-        validatedBy,
-        resolvedAt: new Date(),
-      },
-      { new: true, runValidators: true }
-    )
-      .populate('technician', 'name email')
-      .populate('createdBy', 'name email');
-
-    if (!intervention) {
-      return res.status(404).json({
-        success: false,
-        message: 'Intervention not found'
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      message: 'Intervention resolved successfully',
-      data: intervention
-    });
-
-  } catch (error) {
-    console.error('Error resolving intervention:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error resolving intervention',
-      error: error.message
-    });
-  }
-};
-// Delete an intervention
 exports.deleteIntervention = async (req, res) => {
   try {
     const { id } = req.params;
@@ -359,7 +415,7 @@ exports.deleteIntervention = async (req, res) => {
     });
   }
 };
-// Get intervention by ID
+
 exports.getInterventionById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -398,7 +454,7 @@ exports.getInterventionById = async (req, res) => {
     });
   }
 };
-// Get all interventions for a site
+
 exports.getInterventionsBySite = async (req, res) => {
   try {
     const { siteId } = req.params;
@@ -453,7 +509,7 @@ exports.getInterventionsBySite = async (req, res) => {
     });
   }
 };
-// Get all completed interventions
+
 exports.getCompletedInterventions = async (req, res) => {
   try {
     const { createdBy } = req.query;
@@ -500,7 +556,6 @@ exports.getCompletedInterventions = async (req, res) => {
   }
 };
 
-
 exports.getAllInterventions = async (req, res) => {
   try {
     const interventions = await Intervention.find()
@@ -525,11 +580,6 @@ exports.getAllInterventions = async (req, res) => {
   }
 };
 
-
-
-
-
-// Schedule intervention
 exports.scheduleIntervention = async (req, res) => {
   try {
     const {
@@ -540,36 +590,57 @@ exports.scheduleIntervention = async (req, res) => {
       technician,
       team,
       priority,
+      alertId
     } = req.body;
 
     if (!checkRequired({ siteId, description, plannedDate }, res)) return;
 
+    // Validate alertId if provided
+    if (alertId && !mongoose.isValidObjectId(alertId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid alertId format'
+      });
+    }
+
     const newIntervention = new Intervention({
       siteId,
       description,
-      plannedDate,
+      plannedDate: new Date(plannedDate),
       timeSlot,
       technician,
       team,
       priority,
+      alertId,
+      createdBy: req.body.createdBy // Assuming createdBy is provided in the body
     });
 
     await newIntervention.save();
-    res.status(201).json(newIntervention);
+    res.status(201).json({
+      success: true,
+      message: 'Intervention scheduled successfully',
+      data: newIntervention
+    });
   } catch (error) {
     console.error('Error scheduling intervention:', error);
-    res.status(500).json({ message: 'Error scheduling intervention', error: error.message });
+    res.status(500).json({
+      success: false,
+      message: 'Error scheduling intervention',
+      error: error.message
+    });
   }
 };
 
-// Upload intervention images
 exports.uploadImages = async (req, res) => {
   try {
     const { id } = req.params;
     const { imageUrls } = req.body;
 
     if (!Array.isArray(imageUrls)) {
-      return res.status(400).json({ message: 'imageUrls must be an array' });
+      return res.status(400).json({ 
+        success: false,
+        message: 'imageUrls must be an array' 
+      });
     }
 
     const intervention = await Intervention.findByIdAndUpdate(
@@ -578,11 +649,22 @@ exports.uploadImages = async (req, res) => {
       { new: true }
     );
 
-    if (!intervention) return res.status(404).json({ message: 'Intervention not found' });
+    if (!intervention) return res.status(404).json({ 
+      success: false,
+      message: 'Intervention not found' 
+    });
 
-    res.json(intervention);
+    res.status(200).json({
+      success: true,
+      message: 'Images uploaded successfully',
+      data: intervention
+    });
   } catch (error) {
     console.error('Error uploading images:', error);
-    res.status(500).json({ message: 'Error uploading images', error: error.message });
+    res.status(500).json({ 
+      success: false,
+      message: 'Error uploading images', 
+      error: error.message 
+    });
   }
 };

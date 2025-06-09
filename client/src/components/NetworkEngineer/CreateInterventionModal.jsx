@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import PropTypes from 'prop-types';
@@ -10,6 +9,7 @@ const CreateInterventionModal = ({ onClose, onSubmit, isScheduling = false, init
   const currentUser = useSelector((state) => state.user?.currentUser);
   const [formData, setFormData] = useState({
     siteId: initialData.siteId || '',
+    alertId: initialData.alertId || '', // Add alertId to form state
     description: initialData.description || '',
     plannedDate: initialData.plannedDate ? new Date(initialData.plannedDate).toISOString().split('T')[0] : '',
     timeSlotStart: initialData.timeSlot?.start || '',
@@ -83,10 +83,12 @@ const CreateInterventionModal = ({ onClose, onSubmit, isScheduling = false, init
       plannedDate: new Date(formData.plannedDate).toISOString(),
       timeSlot: isScheduling ? { start: formData.timeSlotStart, end: formData.timeSlotEnd } : undefined,
       technician: formData.technician,
-      createdBy: currentUser._id, // Use current user's ID
+      createdBy: currentUser._id,
       priority: formData.priority,
+      alertId: formData.alertId || undefined, // Include alertId in payload
     };
 
+    console.log('Submitting intervention payload:', payload); // Debug log
     onSubmit(payload);
   };
 
@@ -98,10 +100,10 @@ const CreateInterventionModal = ({ onClose, onSubmit, isScheduling = false, init
           <div className="mb-4 p-2 bg-red-50 border-l-4 border-red-600 text-red-700 text-sm rounded">{error}</div>
         )}
         <div className="space-y-4">
+          {/* Hidden input for alertId to preserve it */}
+          <input type="hidden" name="alertId" value={formData.alertId} />
           <div>
-            <label className="block text-sm
-
- font-medium text-gray-700">Site ID</label>
+            <label className="block text-sm font-medium text-gray-700">Site ID</label>
             <input
               name="siteId"
               value={formData.siteId}

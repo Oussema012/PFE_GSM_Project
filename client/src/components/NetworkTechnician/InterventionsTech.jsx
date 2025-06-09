@@ -98,7 +98,7 @@ const InterventionsTech = () => {
       return false;
     }
     const plannedDate = new Date(intervention.plannedDate);
-    const today = new Date('2025-05-31T00:00:00+01:00'); // May 31, 2025, 00:00 CET
+    const today = new Date(); // Use current date
     return plannedDate < today;
   };
 
@@ -156,7 +156,7 @@ const InterventionsTech = () => {
     }
 
     try {
-      const response = await axios.post(`/api/interventions/${selectedIntervention._id}/resolve`, {
+      const response = await axios.put(`/api/interventions/${selectedIntervention._id}/resolve`, {
         resolutionNotes,
         validatedBy,
       });
@@ -165,6 +165,8 @@ const InterventionsTech = () => {
       );
       setShowResolveModal(false);
       setError(null);
+      // Refresh interventions to ensure UI consistency
+      fetchInterventions();
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to resolve intervention');
     }
@@ -390,7 +392,7 @@ const InterventionsTech = () => {
                             aria-label={`Resolve intervention ${intervention._id}`}
                           >
                             Resolve
-                          </button>
+                        </button>
                         )}
                       </td>
                     </tr>
@@ -442,7 +444,6 @@ const InterventionsTech = () => {
                   className="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
                   required
                   aria-required="true"
-                  readOnly
                 />
               </div>
               <div className="flex justify-end space-x-2">
@@ -529,7 +530,7 @@ const InterventionsTech = () => {
                 <>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Resolution Notes</label>
-                    <p className="text-sm text-gray-500">{interventionDetails.resolutionNotes || 'N/A'}</p>
+<p className="text-sm text-gray-500">{interventionDetails.resolutionNotes || 'N/A'}</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Validated By</label>
@@ -546,7 +547,7 @@ const InterventionsTech = () => {
               <button
                 type="button"
                 onClick={closeDetailsModal}
-                className="bg-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-400"
+                className="bg-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-200"
                 aria-label="Close details modal"
               >
                 Close
