@@ -261,7 +261,7 @@ const AdminDashboard = () => {
                 } transition`}
               >
                 <FaGlobe className="mr-3 text-blue-300" />
-                Map of Sites
+                Maintenances
               </Link>
             </li>
           </ul>

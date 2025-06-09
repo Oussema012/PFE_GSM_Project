@@ -91,7 +91,7 @@ const DashMapSites = () => {
               <div>
                 <h4 className="font-semibold text-gray-900">{maintenance.description}</h4>
                 <p className="text-sm text-gray-600">
-                  Site: {maintenance.equipmentId?.name || 'Unknown'}
+                  Equipment: {maintenance.equipmentId?.name || 'Unknown'}
                 </p>
                 <p className="text-sm text-gray-600">
                   Technician: {maintenance.performedBy?.name || 'N/A'}

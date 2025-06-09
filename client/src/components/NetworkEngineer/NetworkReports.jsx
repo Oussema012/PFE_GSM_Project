@@ -25,7 +25,6 @@ import {
 import {
   Search as SearchIcon,
   People as PeopleIcon,
-  AccessTime as AccessTimeIcon,
   Power as PowerIcon,
   PowerOff as PowerOffIcon,
 } from '@mui/icons-material';
@@ -56,8 +55,7 @@ const NetworkReports = () => {
       users.filter(
         (user) =>
           (user.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (user.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (user.department || '').toLowerCase().includes(searchTerm.toLowerCase())
+          (user.email || '').toLowerCase().includes(searchTerm.toLowerCase())
       )
     );
   }, [searchTerm, users]);
@@ -121,18 +119,6 @@ const NetworkReports = () => {
 
   const handleCloseToast = () => {
     setToast({ ...toast, open: false });
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    try {
-      return new Date(dateString).toLocaleString('en-US', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-      });
-    } catch {
-      return 'N/A';
-    }
   };
 
   return (
@@ -212,15 +198,8 @@ const NetworkReports = () => {
                 <TableCell>Name</TableCell>
                 <TableCell>Email</TableCell>
                 <TableCell>Role</TableCell>
-                <TableCell>Department</TableCell>
                 <TableCell>Status</TableCell>
                 <TableCell>Assigned Sites</TableCell>
-                <TableCell>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <AccessTimeIcon fontSize="small" />
-                    Last Login
-                  </Box>
-                </TableCell>
                 <TableCell align="right">Actions</TableCell>
               </TableRow>
             </TableHead>
@@ -243,7 +222,6 @@ const NetworkReports = () => {
                         size="small"
                       />
                     </TableCell>
-                    <TableCell>{user.department || 'N/A'}</TableCell>
                     <TableCell>
                       <Chip
                         label={user.isActive ? 'Active' : 'Inactive'}
@@ -256,7 +234,6 @@ const NetworkReports = () => {
                         ? user.assignedSiteNames.join(', ')
                         : 'No Sites'}
                     </TableCell>
-                    <TableCell>{formatDate(user.lastLogin)}</TableCell>
                     <TableCell align="right">
                       {user.role === 'technician' && (
                         <>
@@ -283,7 +260,7 @@ const NetworkReports = () => {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
+                  <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
                     <Typography color="text.secondary">No users found</Typography>
                   </TableCell>
                 </TableRow>

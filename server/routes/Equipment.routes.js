@@ -7,11 +7,11 @@ router.post('/', equipmentController.addEquipment);
 
 // Get all equipment for a specific site
 router.get('/:siteId', equipmentController.getEquipmentBySite);
-
+router.get('/', equipmentController.getAllEquipment);
 // Update equipment by ID
 router.put('/:id', equipmentController.updateEquipment);
 
 // Delete equipment by ID
 router.delete('/:id', equipmentController.deleteEquipment);
-router.get('/options', equipmentController.getEquipmentOptions); // 👈 Add this route
+router.get('/options', equipmentController.getEquipmentOptions);
 module.exports = router;

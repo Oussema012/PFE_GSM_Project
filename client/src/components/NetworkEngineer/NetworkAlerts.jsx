@@ -15,7 +15,6 @@ import {
   FiTrash2,
 } from 'react-icons/fi';
 import CreateAlert from './CreateAlert';
-import ResolveByType from './ResolveByType';
 import DeleteAlert from './DeleteAlert';
 import AcknowledgeAlert from './AcknowledgeAlert';
 import DetailAlert from './DetailAlert';
@@ -35,7 +34,6 @@ const NetworkAlerts = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredAlerts, setFilteredAlerts] = useState([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showResolveByTypeModal, setShowResolveByTypeModal] = useState(false);
   const [selectedAlert, setSelectedAlert] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [resolving, setResolving] = useState(null);
@@ -44,23 +42,23 @@ const NetworkAlerts = () => {
   axios.defaults.baseURL = 'http://localhost:8000';
 
   // Fetch site references for dropdown
-useEffect(() => {
-  const fetchSiteReferences = async () => {
-    try {
-      const response = await axios.get('/api/sites/references');
-      // Normalize to array of strings for consistency
-      const references = Array.isArray(response.data)
-        ? response.data.map((site) => site.site_reference).filter(Boolean)
-        : [];
-      setSiteReferences(references);
-    } catch (error) {
-      console.error('Failed to fetch site references:', error.response?.data || error.message);
-      setError('Failed to fetch site references. Using fallback options.');
-      setSiteReferences(['SITE001', 'SITE002']);
-    }
-  };
-  fetchSiteReferences();
-}, []);
+  useEffect(() => {
+    const fetchSiteReferences = async () => {
+      try {
+        const response = await axios.get('/api/sites/references');
+        // Normalize to array of strings for consistency
+        const references = Array.isArray(response.data)
+          ? response.data.map((site) => site.site_reference).filter(Boolean)
+          : [];
+        setSiteReferences(references);
+      } catch (error) {
+        console.error('Failed to fetch site references:', error.response?.data || error.message);
+        setError('Failed to fetch site references. Using fallback options.');
+        setSiteReferences(['SITE001', 'SITE002']);
+      }
+    };
+    fetchSiteReferences();
+  }, []);
 
   const fetchAlerts = async () => {
     setLoading(true);
@@ -99,7 +97,7 @@ useEffect(() => {
             url = '/api/alerts';
             break;
           case 'resolved':
-            url = '/api/alerts/resolved';
+            url = `/api/alerts/resolved`;
             break;
           case 'history':
             url = '/api/alerts/history';
@@ -223,18 +221,6 @@ useEffect(() => {
     setTimeout(() => setSuccessMessage(''), 3000);
   };
 
-  const handleResolveByTypeSuccess = ({ siteId, type }, message) => {
-    setAlerts(
-      alerts.map((alert) =>
-        alert.siteId === siteId && alert.type === type && alert.status === 'active'
-          ? { ...alert, status: 'resolved', resolvedAt: new Date().toISOString() }
-          : alert
-      )
-    );
-    setSuccessMessage(message);
-    setTimeout(() => setSuccessMessage(''), 3000);
-  };
-
   const handleDeleteSuccess = (alertId, message) => {
     setAlerts(alerts.filter((alert) => alert._id !== alertId));
     setSuccessMessage(message);
@@ -274,13 +260,6 @@ useEffect(() => {
               >
                 <FiPlus className="mr-2" />
                 Create Alert
-              </button>
-              <button
-                onClick={() => setShowResolveByTypeModal(true)}
-                className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-              >
-                <FiCheckCircle className="mr-2" />
-                Resolve by Type
               </button>
               <button
                 onClick={fetchAlerts}
@@ -406,14 +385,6 @@ useEffect(() => {
           isOpen={showCreateModal}
           onClose={() => setShowCreateModal(false)}
           onSuccess={handleCreateSuccess}
-          onError={setError}
-          siteReferences={siteReferences}
-        />
-
-        <ResolveByType
-          isOpen={showResolveByTypeModal}
-          onClose={() => setShowResolveByTypeModal(false)}
-          onSuccess={handleResolveByTypeSuccess}
           onError={setError}
           siteReferences={siteReferences}
         />

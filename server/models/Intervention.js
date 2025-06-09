@@ -1,6 +1,5 @@
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
-
 const interventionSchema = new Schema({
   siteId: { type: String, required: true },
   description: { type: String, required: true },
@@ -14,13 +13,11 @@ const interventionSchema = new Schema({
   ref: 'User',
   required: true
 },
-
   createdBy: {
   type: mongoose.Schema.Types.ObjectId,
   ref: 'User',
   required: true
 },   
-
   priority: {
     type: String,
     enum: ['low', 'medium', 'high'],
@@ -36,6 +33,5 @@ const interventionSchema = new Schema({
   validatedBy: { type: String },
   createdAt: { type: Date, default: Date.now }
 });
-
 const Intervention = mongoose.model('Intervention', interventionSchema);
 module.exports = Intervention;

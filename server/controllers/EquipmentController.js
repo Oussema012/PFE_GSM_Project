@@ -86,6 +86,16 @@ const getEquipmentOptions = (req, res) => {
   ];
   res.status(200).json(options);
 };
+// Get all equipment
+const getAllEquipment = async (req, res) => {
+  try {
+    const equipment = await Equipment.find();
+    res.status(200).json(equipment);
+  } catch (err) {
+    console.error('Get All Equipment Error:', err);
+    res.status(500).json({ message: 'Error retrieving all equipment', error: err.message || err });
+  }
+};
 
 module.exports = {
   addEquipment,
@@ -93,5 +103,6 @@ module.exports = {
   updateEquipment,
   deleteEquipment,
   fallbackEquipmentOptions,
-  getEquipmentOptions 
+  getEquipmentOptions ,
+  getAllEquipment
 };

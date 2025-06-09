@@ -5,11 +5,16 @@ import { FiPlus, FiX, FiEdit, FiTrash2, FiCheckCircle, FiAlertCircle, FiEye, FiR
 // Validate MongoDB ObjectId (24-character hex string)
 const isValidObjectId = (id) => /^[0-9a-fA-F]{24}$/.test(id);
 
-// Fallback static equipment options for testing
+// Fallback static equipment options
 const fallbackEquipmentOptions = [
-  { equipment_id: 'eq001', name: 'Antenna A', type: 'Antenna' },
-  { equipment_id: 'eq002', name: 'Generator B', type: 'Generator' },
-  { equipment_id: 'eq003', name: 'Router C', type: 'Router' },
+  { equipment_id: 'eq001', name: 'Rectifier Unit', type: 'Rectifier' },
+  { equipment_id: 'eq002', name: 'Battery Bank', type: 'Battery' },
+  { equipment_id: 'eq003', name: 'Microwave Link', type: 'Backhaul' },
+  { equipment_id: 'eq004', name: 'Air Conditioner', type: 'Cooling' },
+  { equipment_id: 'eq005', name: 'Fire Suppression', type: 'Safety' },
+  { equipment_id: '68339a80036e9411af7b43e0', name: 'Generator B', type: 'Generator' },
+  { equipment_id: '683a50cf41a4fcf25931e85d', name: 'Router C', type: 'Router' },
+  { equipment_id: '6845c8d80168c4e00a682c00', name: 'Antenna A', type: 'Antenna' },
 ];
 
 const ViewSiteDetails = ({ isOpen, onClose, site }) => {
@@ -43,8 +48,10 @@ const ViewSiteDetails = ({ isOpen, onClose, site }) => {
       console.log('Equipment List Response:', response.data);
       const transformedData = response.data.map(item => ({
         ...item,
-        equipment_id: item.equipment_id || item._id,
+        equipment_id: item._id, // Keep _id as equipment_id for internal use
         name: item.name || 'N/A',
+        type: item.type || 'N/A',
+        status: item.status || 'N/A',
       }));
       setEquipmentList(transformedData);
     } catch (err) {
@@ -74,7 +81,6 @@ const ViewSiteDetails = ({ isOpen, onClose, site }) => {
       console.log('Equipment Options Response:', response.data);
       if (response.data.length === 0) {
         console.log('API returned empty array, using fallback');
-        setError('No equipment options available. Contact the administrator.');
         setEquipmentOptions(fallbackEquipmentOptions);
       } else {
         setEquipmentOptions(response.data);
@@ -137,7 +143,13 @@ const ViewSiteDetails = ({ isOpen, onClose, site }) => {
         setError('Status must be one of: operational, faulty, maintenance.');
         return;
       }
-      const response = await axios.post('http://localhost:8000/api/equipment', equipmentFormData);
+      const response = await axios.post('http://localhost:8000/api/equipment', {
+        equipment_id: equipmentFormData.equipment_id,
+        siteId: equipmentFormData.siteId,
+        name: equipmentFormData.name,
+        type: equipmentFormData.type,
+        status: equipmentFormData.status,
+      });
       setEquipmentList([...equipmentList, response.data]);
       setSuccessMessage('Equipment added successfully');
       setTimeout(() => setSuccessMessage(''), 3000);
@@ -147,15 +159,7 @@ const ViewSiteDetails = ({ isOpen, onClose, site }) => {
     } catch (err) {
       if (err.response?.status === 400) {
         const message = err.response?.data?.message || 'Invalid input';
-        if (message.includes('E11000 duplicate key error') && message.includes('equipment_id')) {
-          setError('Equipment ID already exists. Please select a unique equipment.');
-        } else if (message.includes('Invalid site ID') || message.includes('Cast to ObjectId failed')) {
-          setError('Invalid site ID.');
-        } else if (message.includes('Site not found')) {
-          setError('Site not found for the provided site ID.');
-        } else {
-          setError(`Failed to add equipment: ${message}`);
-        }
+        setError(`Failed to add equipment: ${message}`);
       } else if (err.response?.status === 404) {
         setError('Site not found for the provided site ID.');
       } else {
@@ -222,8 +226,8 @@ const ViewSiteDetails = ({ isOpen, onClose, site }) => {
       return;
     }
     setEquipmentFormData({
-      equipment_id: eq.equipment_id,
-      name: eq.name,
+      equipment_id: eq.equipment_id, // Internal ID (_id)
+      name: eq.name, // Displayed in form
       type: eq.type || '',
       status: eq.status,
       siteId: eq.siteId,
@@ -350,7 +354,6 @@ const ViewSiteDetails = ({ isOpen, onClose, site }) => {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Equipment ID</th>
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
@@ -360,7 +363,6 @@ const ViewSiteDetails = ({ isOpen, onClose, site }) => {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {equipmentList.map((eq) => (
                     <tr key={eq._id} className="hover:bg-gray-50">
-                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{eq.equipment_id}</td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">{eq.name || 'N/A'}</td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">{eq.type || 'N/A'}</td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
