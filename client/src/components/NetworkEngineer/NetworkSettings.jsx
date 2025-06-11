@@ -3,7 +3,6 @@ import axios from 'axios';
 import {
   FiPlus,
   FiEdit,
-  FiTrash2,
   FiCheckCircle,
   FiAlertCircle,
   FiClock,
@@ -41,7 +40,6 @@ const NetworkSettings = () => {
   const [successMessage, setSuccessMessage] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(null);
-  const [showDeleteModal, setShowDeleteModal] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(null);
   const [currentView, setCurrentView] = useState('month'); // month, week, day
   const [currentDate, setCurrentDate] = useState(moment().tz('Europe/Paris'));
@@ -193,22 +191,6 @@ const NetworkSettings = () => {
     } catch (err) {
       console.error('Update maintenance error:', err.response?.data || err.message);
       setError(`Failed to update maintenance: ${err.response?.data?.message || err.message}`);
-    }
-  };
-
-  // Delete maintenance
-  const deleteMaintenance = async () => {
-    setError('');
-    setSuccessMessage('');
-    try {
-      await axios.delete(`/api/maintenance/${showDeleteModal}`);
-      setMaintenances(maintenances.filter((m) => m._id !== showDeleteModal));
-      setSuccessMessage('Maintenance deleted successfully');
-      setTimeout(() => setSuccessMessage(''), 3000);
-      setShowDeleteModal(null);
-    } catch (err) {
-      console.error('Delete maintenance error:', err.response?.data || err.message);
-      setError(`Failed to delete maintenance: ${err.response?.data?.message || err.message}`);
     }
   };
 
@@ -457,13 +439,6 @@ const NetworkSettings = () => {
                         >
                           <FiEdit className="h-4 w-4" />
                         </button>
-                        <button
-                          onClick={() => setShowDeleteModal(task._id)}
-                          className="text-red-600 hover:text-red-900"
-                          title="Delete"
-                        >
-                          <FiTrash2 className="h-4 w-4" />
-                        </button>
                       </div>
                     </div>
                   ))
@@ -532,13 +507,6 @@ const NetworkSettings = () => {
                     title="Edit"
                   >
                     <FiEdit className="h-5 w-5" />
-                  </button>
-                  <button
-                    onClick={() => setShowDeleteModal(task._id)}
-                    className="text-red-600 hover:text-red-900"
-                    title="Delete"
-                  >
-                    <FiTrash2 className="h-5 w-5" />
                   </button>
                 </div>
               </div>
@@ -787,11 +755,11 @@ const NetworkSettings = () => {
                     </label>
                     <input
                       id="add-date"
-                      type="date"
+                      type="id"
                       name="scheduledDate"
                       value={formData.scheduledDate}
                       onChange={handleInputChange}
-                      className="mt-1 block w-full border border-gray-300 rounded-md py-2 px-3 text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                      className="mt-1 block w-full border-gray-300 rounded-md py-2 px-2 text-sm focus:ring-indigo-500 focus:border-indigo-500"
                     />
                   </div>
                   <div>
@@ -799,12 +767,12 @@ const NetworkSettings = () => {
                       Time
                     </label>
                     <input
-                      id="add-time"
+                      id="time"
                       type="time"
                       name="scheduledTime"
                       value={formData.scheduledTime}
                       onChange={handleInputChange}
-                      className="mt-1 block w-full border border-gray-300 rounded-md py-2 px-3 text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                      className="mt-1 block w-full border-gray-300 rounded-md py-2 px-3 text-sm focus:ring-indigo-500 focus:border-indigo-500"
                       step={60}
                     />
                   </div>
@@ -817,8 +785,8 @@ const NetworkSettings = () => {
                     id="add-status"
                     name="status"
                     value={formData.status}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-md py-2 px-3 text-sm focus:ring-indigo-500 focus:border-indigo-500"
+onChange={handleInputChange}
+                    className="mt-1 block w-full border-gray-300 rounded-md py-2 px-3 text-sm focus:ring-indigo-500 focus:border-indigo-500"
                   >
                     <option value="pending">Pending</option>
                     <option value="in progress">In Progress</option>
@@ -829,13 +797,13 @@ const NetworkSettings = () => {
               <div className="mt-6 flex justify-end space-x-3">
                 <button
                   onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 text-sm"
+                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md text-sm hover:bg-gray-300"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={addMaintenance}
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm"
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700"
                 >
                   Schedule
                 </button>
@@ -954,13 +922,13 @@ const NetworkSettings = () => {
               <div className="mt-6 flex justify-end space-x-3">
                 <button
                   onClick={() => setShowEditModal(null)}
-                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 text-sm"
+                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md text-sm hover:bg-gray-300"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={updateMaintenance}
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm"
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700"
                 >
                   Update
                 </button>
@@ -1013,7 +981,7 @@ const NetworkSettings = () => {
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Scheduled Time</label>
                     <p className="mt-1 text-sm text-gray-600">
-                      {moment(showDetailsModal.scheduledTime, 'HH:mm:ss').format('h:mm A')}
+                      {moment(showDetailsModal.scheduledTime, 'HH:mm:ss').format('HH:mm')}
                     </p>
                   </div>
                 )}
@@ -1035,37 +1003,9 @@ const NetworkSettings = () => {
               <div className="mt-6 flex justify-end">
                 <button
                   onClick={closeDetailsModal}
-                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 text-sm"
+                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md text-sm hover:bg-gray-300"
                 >
                   Close
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {showDeleteModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full">
-              <div className="flex items-center mb-4">
-                <FiTrash2 className="h-6 w-6 text-red-600 mr-2" />
-                <h3 className="text-lg font-semibold text-gray-900">Delete Maintenance</h3>
-              </div>
-              <p className="text-sm text-gray-600 mb-6">
-                Are you sure you want to delete this maintenance record? This action cannot be undone.
-              </p>
-              <div className="flex justify-end space-x-3">
-                <button
-                  onClick={() => setShowDeleteModal(null)}
-                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 text-sm"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={deleteMaintenance}
-                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm"
-                >
-                  Delete
                 </button>
               </div>
             </div>

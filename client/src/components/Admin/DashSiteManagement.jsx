@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import ViewSite from '../NetworkEngineer/ViewSiteDetails';
+import ViewSite from './SiteDetails';
 
 // Validate MongoDB ObjectId (24-character hex string)
 const isValidObjectId = (id) => /^[0-9a-fA-F]{24}$/.test(id);
@@ -15,37 +15,37 @@ const DashSiteManagement = () => {
 
   useEffect(() => {
     fetchSites();
-    // Debug single site fetch
+    // Debug single site fetch (consider removing in production)
     fetchSingleSite('6820fe2f0f0c648ea3dc5da7');
   }, []);
 
-  // Fetch all sites
+  /**
+   * Fetches all sites and their associated equipment data.
+   */
   const fetchSites = async () => {
     setLoading(true);
     setError('');
     try {
       const response = await axios.get('http://localhost:8000/api/sites');
       console.log('Raw /api/sites response:', response.data);
-      
+
       // Normalize site data
-      const normalizedSites = response.data.map((site) => {
-        return {
-          ...site,
-          site_reference: site.site_reference || 'N/A', // Schema requires
-          status: site.status === 'ON' ? 'active' : 
-                 site.status === 'OFF' ? 'inactive' : 
-                 site.status?.toLowerCase() || 'active', // Schema enum
-          address: site.address || 'N/A', // For Location
-          technology: Array.isArray(site.technology) ? site.technology : [], // For Technology
-          power_status: site.power_status || 'unknown', // For Power
-          battery_level: site.battery_level ?? 0, // For Power
-          location: {
-            lat: site.location?.lat ?? 0,
-            lon: site.location?.lon ?? 0,
-          },
-        };
-      });
-      
+      const normalizedSites = response.data.map((site) => ({
+        ...site,
+        site_reference: site.site_reference || 'N/A',
+        status: site.status === 'ON' ? 'active' :
+                site.status === 'OFF' ? 'inactive' :
+                site.status?.toLowerCase() || 'active',
+        address: site.address || 'N/A',
+        technology: Array.isArray(site.technology) ? site.technology : [],
+        power_status: site.power_status || 'unknown',
+        battery_level: site.battery_level ?? 0,
+        location: {
+          lat: site.location?.lat ?? 0,
+          lon: site.location?.lon ?? 0,
+        },
+      }));
+
       setSites(normalizedSites);
 
       // Fetch equipment for each site
@@ -77,7 +77,10 @@ const DashSiteManagement = () => {
     }
   };
 
-  // Fetch single site for debugging
+  /**
+   * Fetches a single site for debugging purposes.
+   * @param {string} id - The site ID to fetch.
+   */
   const fetchSingleSite = async (id) => {
     if (!isValidObjectId(id)) {
       console.warn(`Invalid site ID for single fetch: ${id}`);
@@ -91,21 +94,13 @@ const DashSiteManagement = () => {
     }
   };
 
+  /**
+   * Opens the view modal for a selected site.
+   * @param {Object} site - The site to view.
+   */
   const handleView = (site) => {
     setCurrentSite(site);
     setIsViewModalOpen(true);
-  };
-
-  const handleDelete = async (id) => {
-    if (confirm('Are you sure you want to delete this site?')) {
-      try {
-        await axios.delete(`http://localhost:8000/api/sites/${id}`);
-        alert('Site deleted successfully');
-        fetchSites();
-      } catch (error) {
-        alert(`Failed to delete site: ${error.response?.data?.message || error.message}`);
-      }
-    }
   };
 
   const statusColors = {
@@ -127,7 +122,7 @@ const DashSiteManagement = () => {
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Site Management</h1>
-        <button 
+        <button
           onClick={fetchSites}
           className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
         >
@@ -235,11 +230,11 @@ const DashSiteManagement = () => {
                           </span>
                           {site.battery_level !== undefined && (
                             <div className="ml-2 w-16 bg-gray-200 rounded-full h-2.5">
-                              <div 
+                              <div
                                 className={`h-2.5 rounded-full ${
                                   site.battery_level > 50 ? 'bg-green-500' :
                                   site.battery_level > 20 ? 'bg-yellow-500' : 'bg-red-500'
-                                }`} 
+                                }`}
                                 style={{ width: `${site.battery_level}%` }}
                               ></div>
                             </div>
@@ -256,13 +251,9 @@ const DashSiteManagement = () => {
                               <div key={eq._id} className="flex items-center">
                                 <span
                                   className={`inline-block w-2 h-2 rounded-full mr-2 ${
-                                    eq.status === 'operational'
-                                      ? 'bg-green-500'
-                                      : eq.status === 'faulty'
-                                      ? 'bg-red-500'
-                                      : eq.status === 'maintenance'
-                                      ? 'bg-yellow-500'
-                                      : 'bg-gray-500'
+                                    eq.status === 'operational' ? 'bg-green-500' :
+                                    eq.status === 'faulty' ? 'bg-red-500' :
+                                    eq.status === 'maintenance' ? 'bg-yellow-500' : 'bg-gray-500'
                                   }`}
                                 ></span>
                                 <span className="text-sm">
@@ -277,52 +268,32 @@ const DashSiteManagement = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={() => handleView(site)}
-                            className="text-blue-600 hover:text-blue-900 p-1 rounded hover:bg-blue-50"
-                            title="View Details"
+                        <button
+                          onClick={() => handleView(site)}
+                          className="text-blue-600 hover:text-blue-900 p-1 rounded hover:bg-blue-50"
+                          title="View Details"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-5 w-5"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
                           >
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              className="h-5 w-5"
-                              viewBox="0 0 20 20"
-                              fill="currentColor"
-                            >
-                              <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-                              <path
-                                fillRule="evenodd"
-                                d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
-                                clipRule="evenodd"
-                              />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() => handleDelete(site._id)}
-                            className="text-red-600 hover:text-red-900 p-1 rounded hover:bg-red-50"
-                            title="Delete Site"
-                          >
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              className="h-5 w-5"
-                              viewBox="0 0 20 20"
-                              fill="currentColor"
-                            >
-                              <path
-                                fillRule="evenodd"
-                                d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
-                                clipRule="evenodd"
-                              />
-                            </svg>
-                          </button>
-                        </div>
+                            <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                            <path
+                              fillRule="evenodd"
+                              d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                        </button>
                       </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
                     <td
-                      colSpan="7"
+                      colSpan={7}
                       className="px-6 py-4 text-center text-sm text-gray-500"
                     >
                       No sites found

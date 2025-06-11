@@ -266,24 +266,6 @@ const NetworkTopology = () => {
     }
   };
 
-  // Delete intervention
-  const deleteIntervention = async (interventionId) => {
-    if (!window.confirm('Are you sure you want to delete this intervention?')) return;
-    setIsSubmitting(true);
-    try {
-      await apiFetch(`${API_URL}/api/interventions/${interventionId}`, {
-        method: 'DELETE',
-      });
-      setInterventions((prev) => prev.filter((item) => item._id !== interventionId));
-      setSelectedIntervention(null);
-      setError(null);
-    } catch (error) {
-      setError(error.message || 'Failed to delete intervention');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   return (
     <ErrorBoundary>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -326,7 +308,7 @@ const NetworkTopology = () => {
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth="2"
-                d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"
+                d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 5.5m0 4.5V3m4.5 7.5v0m0 0l-4.5 4.5m4.5 0V3"
               />
             </svg>
             Export to CSV
@@ -336,7 +318,7 @@ const NetworkTopology = () => {
         {/* Filters */}
         <div className="mb-6 p-6 bg-white border border-gray-200 rounded-xl shadow-lg">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold text-gray-900">Filters</h2>
+            <h2 className="text-lg font-semibold text-gray-900">Filters</h2>
             <button
               onClick={resetFilters}
               className="text-blue-600 hover:text-blue-800 text-sm font-medium"
@@ -380,7 +362,6 @@ const NetworkTopology = () => {
                 value={filters.status}
                 onChange={handleFilterChange}
                 className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                aria-describedby="status-description"
               >
                 <option value="">All</option>
                 <option value="planned">Planned</option>
@@ -406,7 +387,7 @@ const NetworkTopology = () => {
                 value={filters.technician}
                 onChange={handleFilterChange}
                 placeholder="Technician Name"
-                className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-600"
                 aria-describedby="technician-description"
               />
               <p id="technician-description" className="sr-only">
@@ -630,7 +611,7 @@ const NetworkTopology = () => {
                           className="w-4 h-4"
                           fill="none"
                           stroke="currentColor"
-                          viewBox="0 0 24 24"
+                          viewBox="0 0 24  ils
                           xmlns="http://www.w3.org/2000/svg"
                           aria-hidden="true"
                         >
@@ -641,7 +622,7 @@ const NetworkTopology = () => {
                             d={
                               sortConfig.direction === 'asc'
                                 ? 'M19 9l-7 7-7-7'
-                                : 'M5 15l7-7 7 7'
+                                : 'M5 15l-7 7 7'
                             }
                           />
                         </svg>
@@ -857,31 +838,6 @@ const NetworkTopology = () => {
                                 strokeLinejoin="round"
                                 strokeWidth="2"
                                 d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                              />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deleteIntervention(intervention._id);
-                            }}
-                            disabled={isSubmitting}
-                            className="text-red-600 hover:text-red-900 p-1 rounded-md disabled:text-gray-400 disabled:cursor-not-allowed"
-                            aria-label={`Delete intervention ${intervention.siteId || 'unknown'}`}
-                          >
-                            <svg
-                              className="w-5 h-5"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                              xmlns="http://www.w3.org/2000/svg"
-                              aria-hidden="true"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth="2"
-                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5-4h4M4 7h16"
                               />
                             </svg>
                           </button>

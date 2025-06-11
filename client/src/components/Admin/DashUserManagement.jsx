@@ -231,9 +231,11 @@ const DashUserManagement = () => {
                       />
                     </TableCell>
                     <TableCell>
-                      {user.assignedSiteNames?.length > 0
-                        ? user.assignedSiteNames.join(', ')
-                        : 'No Sites'}
+                      {user.role === 'technician'
+                        ? user.assignedSiteNames?.length > 0
+                          ? user.assignedSiteNames.join(', ')
+                          : 'No Sites'
+                        : '-'}
                     </TableCell>
                     <TableCell align="right">
                       {user.role === 'technician' && (

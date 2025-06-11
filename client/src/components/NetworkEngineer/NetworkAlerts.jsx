@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import {
-  FiCheckCircle,
-  FiXCircle,
   FiAlertCircle,
   FiRefreshCw,
   FiClock,
@@ -11,12 +9,8 @@ import {
   FiFilter,
   FiSearch,
   FiCalendar,
-  FiPlus,
-  FiTrash2,
   FiTool,
 } from 'react-icons/fi';
-import CreateAlert from './CreateAlert';
-import DeleteAlert from './DeleteAlert';
 import AcknowledgeAlert from './AcknowledgeAlert';
 import DetailAlert from './DetailAlert';
 import CreateInterventionModal from './CreateInterventionModal';
@@ -35,10 +29,8 @@ const NetworkAlerts = () => {
   const [successMessage, setSuccessMessage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredAlerts, setFilteredAlerts] = useState([]);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [selectedAlert, setSelectedAlert] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
-  const [resolving, setResolving] = useState(null);
+  const [selectedAlert, setSelectedAlert] = useState(null);
   const [siteReferences, setSiteReferences] = useState([]);
   const [showScheduleInterventionModal, setShowScheduleInterventionModal] = useState(false);
   const [selectedAlertForIntervention, setSelectedAlertForIntervention] = useState(null);
@@ -149,57 +141,15 @@ const NetworkAlerts = () => {
     }
   };
 
-  const resolveAlert = async (id) => {
-    setResolving(id);
-    setError('');
-    setSuccessMessage('');
-
-    // Optimistic update
-    setAlerts((prevAlerts) =>
-      prevAlerts.map((alert) =>
-        alert._id === id
-          ? { ...alert, status: 'resolved', resolvedAt: new Date().toISOString() }
-          : alert
-      )
-    );
-
-    try {
-      const response = await axios.put(`/api/alerts/resolve/${id}`);
-      const updatedAlert = response.data.alert;
-
-      setAlerts((prevAlerts) =>
-        prevAlerts.map((alert) =>
-          alert._id === id
-            ? {
-                ...alert,
-                status: updatedAlert.status,
-                resolvedAt: updatedAlert.resolvedAt,
-              }
-            : alert
-        )
-      );
-      setSuccessMessage('Alert resolved successfully');
-      setTimeout(() => setSuccessMessage(''), 3000);
-    } catch (err) {
-      // Rollback optimistic update
-      setAlerts((prevAlerts) =>
-        prevAlerts.map((alert) =>
-          alert._id === id ? { ...alert, status: 'active', resolvedAt: null } : alert
-        )
-      );
-      setError(`Failed to resolve alert: ${err.response?.data?.message || err.message}`);
-    } finally {
-      setResolving(null);
-    }
-  };
-
   const scheduleIntervention = async (payload) => {
     try {
+      console.log('Sending intervention payload:', payload);
       const response = await axios.post('/api/interventions', payload);
       setSuccessMessage('Intervention scheduled successfully');
       setTimeout(() => setSuccessMessage(''), 3000);
       setShowScheduleInterventionModal(false);
       setSelectedAlertForIntervention(null);
+      fetchAlerts(); // Refresh alerts to reflect any status changes
     } catch (error) {
       setError(error.response?.data?.message || 'Failed to schedule intervention');
     }
@@ -231,18 +181,6 @@ const NetworkAlerts = () => {
     }
   };
 
-  const handleCreateSuccess = (newAlert, message) => {
-    setAlerts([...alerts, { ...newAlert, siteId: newAlert.siteId || 'N/A' }]);
-    setSuccessMessage(message);
-    setTimeout(() => setSuccessMessage(''), 3000);
-  };
-
-  const handleDeleteSuccess = (alertId, message) => {
-    setAlerts(alerts.filter((alert) => alert._id !== alertId));
-    setSuccessMessage(message);
-    setTimeout(() => setSuccessMessage(''), 3000);
-  };
-
   const handleAcknowledgeSuccess = (alertId, updatedAlert, message) => {
     setAlerts(
       alerts.map((alert) =>
@@ -271,13 +209,6 @@ const NetworkAlerts = () => {
             </h1>
             <div className="flex space-x-2">
               <button
-                onClick={() => setShowCreateModal(true)}
-                className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
-              >
-                <FiPlus className="mr-2" />
-                Create Alert
-              </button>
-              <button
                 onClick={fetchAlerts}
                 className="flex items-center px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
               >
@@ -291,10 +222,10 @@ const NetworkAlerts = () => {
 
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         {successMessage && (
-          <div className="mb-4 p-4 bg-green-50 border fold-4 border-green-400 rounded">
+          <div className="mb-4 p-4 bg-green-50 border-l-4 border-green-400 rounded">
             <div className="flex">
               <div className="flex-shrink-0">
-                <FiCheckCircle className="h-5 w-5 text-green-400" />
+                <FiCheck className="h-5 w-5 text-green-400" />
               </div>
               <div className="ml-3">
                 <p className="text-sm text-green-700">{successMessage}</p>
@@ -376,9 +307,7 @@ const NetworkAlerts = () => {
                     className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-3 pr-10 py-2 border border-gray-300 rounded-md"
                     disabled={filter === 'active'}
                   />
-                  <div className="absolute inset-y-0 right
-
--0 flex items-center pr-3 pointer-events-none">
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
                     <FiCalendar className="text-gray-400" />
                   </div>
                 </div>
@@ -398,14 +327,6 @@ const NetworkAlerts = () => {
             </div>
           </div>
         </div>
-
-        <CreateAlert
-          isOpen={showCreateModal}
-          onClose={() => setShowCreateModal(false)}
-          onSuccess={handleCreateSuccess}
-          onError={setError}
-          siteReferences={siteReferences}
-        />
 
         <DetailAlert
           isOpen={showDetailModal}
@@ -449,49 +370,49 @@ const NetworkAlerts = () => {
                   <tr>
                     <th
                       scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                     >
                       Site Reference
                     </th>
                     <th
                       scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                     >
                       Type
                     </th>
                     <th
                       scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                     >
                       Message
                     </th>
                     <th
                       scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                     >
                       Status
                     </th>
                     <th
                       scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                     >
                       <FiClock className="inline-block mr-1" /> Created
                     </th>
                     <th
                       scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                     >
                       <FiCheck className="inline-block mr-1" /> Resolved
                     </th>
                     <th
                       scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                     >
                       Acknowledged
                     </th>
                     <th
                       scope="col"
-                      className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
                     >
                       Actions
                     </th>
@@ -502,54 +423,56 @@ const NetworkAlerts = () => {
                     filteredAlerts.map((alert) => (
                       <tr
                         key={alert._id}
-                        className="hover:bg-gray-50 cursor-pointer"
+                        className={`hover:bg-gray-100 cursor-pointer ${
+                          alert.status === 'resolved' ? 'bg-green-50' : 'bg-red-50'
+                        }`}
                         onClick={() => handleRowClick(alert)}
                       >
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        <td className="px-4 py-3 whitespace-nowrap text-xs font-medium text-gray-900">
                           {alert.siteId || 'N/A'}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                        <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-500">
+                          <span className="px-1 py-0.5 inline-flex text-xs leading-4 font-semibold rounded-full bg-blue-100 text-blue-800">
                             {alert.type || 'N/A'}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
+                        <td className="px-4 py-3 text-xs text-gray-500 max-w-[150px] truncate">
                           {alert.message || 'No message'}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-500">
                           <span
-                            className={`px-2 py-1 inline-flex items-center text-xs leading-5 font-semibold rounded-full ${
+                            className={`px-1 py-0.5 inline-flex items-center text-xs leading-4 font-semibold rounded-full ${
                               alert.status === 'active'
-                                ? 'bg-red-100 text-red-800'
-                                : 'bg-green-100 text-green-800'
+                                ? 'bg-red-200 text-red-900'
+                                : 'bg-green-200 text-green-900'
                             }`}
                           >
                             {alert.status === 'active' ? (
-                              <FiXCircle className="mr-1" />
+                              <FiAlertCircle className="mr-1 h-3 w-3" />
                             ) : (
-                              <FiCheckCircle className="mr-1" />
+                              <FiCheck className="mr-1 h-3 w-3" />
                             )}
                             {alert.status}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-500">
                           {alert.createdAt ? new Date(alert.createdAt).toLocaleString() : 'N/A'}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-500">
                           {alert.resolvedAt ? new Date(alert.resolvedAt).toLocaleString() : '-'}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-500">
                           {alert.acknowledged ? (
                             <span className="inline-flex items-center text-green-600">
-                              <FiCheck className="mr-1" /> I saw it
+                              <FiCheck className="mr-1 h-3 w-3" /> I saw it
                             </span>
                           ) : (
                             <span className="inline-flex items-center text-red-600">
-                              <FiEyeOff className="mr-1" /> No
+                              <FiEyeOff className="mr-1 h-3 w-3" /> No
                             </span>
                           )}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <td className="px-4 py-3 whitespace-nowrap text-right text-xs font-medium">
                           <div className="flex justify-end space-x-2">
                             {alert.status === 'active' && (
                               <>
@@ -563,45 +486,23 @@ const NetworkAlerts = () => {
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    resolveAlert(alert._id);
-                                  }}
-                                  className={`flex items-center text-green-600 hover:text-green-900 ${
-                                    resolving === alert._id ? 'opacity-50 cursor-not-allowed' : ''
-                                  }`}
-                                  title="Resolve"
-                                  disabled={resolving === alert._id}
-                                >
-                                  {resolving === alert._id ? (
-                                    <FiRefreshCw className="h-5 w-5 animate-spin" />
-                                  ) : (
-                                    <FiCheckCircle className="h-5 w-5" />
-                                  )}
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
                                     setSelectedAlertForIntervention(alert);
                                     setShowScheduleInterventionModal(true);
                                   }}
                                   className="flex items-center text-blue-600 hover:text-blue-900"
                                   title="Schedule Intervention"
                                 >
-                                  <FiTool className="h-5 w-5" />
+                                  <FiTool className="h-4 w-4" />
                                 </button>
                               </>
                             )}
-                            <DeleteAlert
-                              alertId={alert._id}
-                              onSuccess={handleDeleteSuccess}
-                              onError={setError}
-                            />
                           </div>
                         </td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan="8" className="px-6 py-4 text-center text-sm text-gray-500">
+                      <td colSpan="8" className="px-4 py-3 text-center text-xs text-gray-500">
                         No alerts found matching your criteria
                       </td>
                     </tr>

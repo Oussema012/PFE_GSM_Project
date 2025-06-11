@@ -564,7 +564,7 @@ const LiveTopologyViewer = () => {
                       <div>
                         <label className="font-semibold text-gray-800">Resolution Notes:</label>
                         <textarea
-                          className="textarea textarea-bordered w-full mt-1"
+                          className="textarea textarea-bordered w-full mt-1 bg-white"
                           value={resolutionNotes}
                           onChange={(e) => setResolutionNotes(e.target.value)}
                           placeholder="Enter resolution details (optional)"
