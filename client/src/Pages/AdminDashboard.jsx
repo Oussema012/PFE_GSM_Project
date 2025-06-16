@@ -26,7 +26,6 @@ import DashInterventions from "../components/Admin/DashInterventions";
 import DashMapSites from "../components/Admin/DashMapSites";
 
 // Notification Dropdown Component
-// Notification Dropdown Component
 const AdminNotificationDropdown = ({ onClose }) => {
   return (
     <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-xl z-50 overflow-hidden notification-dropdown">
@@ -34,7 +33,6 @@ const AdminNotificationDropdown = ({ onClose }) => {
         <h3 className="text-lg font-semibold">Notifications</h3>
         <button
           onClick={() => {
-            // Trigger a refresh by calling the API directly
             axios
               .post("http://localhost:8000/api/notifications/check")
               .then(() => {
@@ -66,7 +64,7 @@ const AdminNotificationDropdown = ({ onClose }) => {
 const AdminDashboard = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [activeTab, setActiveTab] = useState("dashboard");
+  const [activeTab, setActiveTab] = useState("system_Overview");
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
   const currentUser = useSelector((state) => state.user.currentUser);
@@ -138,10 +136,10 @@ const AdminDashboard = () => {
         return <DashUserManagement />;
       case "sites_Management":
         return <DashSiteManagement />;
-      case "analytics_reports":
-        return <DashReports />;
       case "alert_Management":
         return <DashNotifications />;
+      case "analytics_reports":
+        return <DashReports />;
       case "recent_Alerts":
         return <DashNotif />;
       case "interventions":
@@ -201,18 +199,7 @@ const AdminDashboard = () => {
                 } transition`}
               >
                 <FaMapMarkedAlt className="mr-3 text-blue-300" />
-                Sites Management
-              </Link>
-            </li>
-            <li>
-              <Link
-                to="/admin-dashboard?tab=analytics_reports"
-                className={`flex items-center px-4 py-3 rounded-lg ${
-                  activeTab === "analytics_reports" ? "bg-blue-700 text-white font-medium" : "hover:bg-blue-700 hover:text-white"
-                } transition`}
-              >
-                <FaChartBar className="mr-3 text-blue-300" />
-                Analytics & Reports
+                Device Management
               </Link>
             </li>
             <li>
@@ -224,6 +211,28 @@ const AdminDashboard = () => {
               >
                 <FaBell className="mr-3 text-blue-300" />
                 Alert Management
+              </Link>
+            </li>
+            <li>
+              <Link
+                to="/admin-dashboard?tab=map_of_sites"
+                className={`flex items-center px-4 py-3 rounded-lg ${
+                  activeTab === "map_of_sites" ? "bg-blue-700 text-white font-medium" : "hover:bg-blue-700 hover:text-white"
+                } transition`}
+              >
+                <FaGlobe className="mr-3 text-blue-300" />
+                Maintenance Schedule
+              </Link>
+            </li>
+            <li>
+              <Link
+                to="/admin-dashboard?tab=interventions"
+                className={`flex items-center px-4 py-3 rounded-lg ${
+                  activeTab === "interventions" ? "bg-blue-700 text-white font-medium" : "hover:bg-blue-700 hover:text-white"
+                } transition`}
+              >
+                <FaTools className="mr-3 text-blue-300" />
+                Interventions Management
               </Link>
             </li>
             <li>
@@ -244,24 +253,13 @@ const AdminDashboard = () => {
             </li>
             <li>
               <Link
-                to="/admin-dashboard?tab=interventions"
+                to="/admin-dashboard?tab=analytics_reports"
                 className={`flex items-center px-4 py-3 rounded-lg ${
-                  activeTab === "interventions" ? "bg-blue-700 text-white font-medium" : "hover:bg-blue-700 hover:text-white"
+                  activeTab === "analytics_reports" ? "bg-blue-700 text-white font-medium" : "hover:bg-blue-700 hover:text-white"
                 } transition`}
               >
-                <FaTools className="mr-3 text-blue-300" />
-                Interventions
-              </Link>
-            </li>
-            <li>
-              <Link
-                to="/admin-dashboard?tab=map_of_sites"
-                className={`flex items-center px-4 py-3 rounded-lg ${
-                  activeTab === "map_of_sites" ? "bg-blue-700 text-white font-medium" : "hover:bg-blue-700 hover:text-white"
-                } transition`}
-              >
-                <FaGlobe className="mr-3 text-blue-300" />
-                Maintenances
+                <FaChartBar className="mr-3 text-blue-300" />
+                Statistics Dashboard
               </Link>
             </li>
           </ul>
@@ -298,19 +296,14 @@ const AdminDashboard = () => {
               <div className="relative notification-bell" ref={dropdownRef}>
                 <button
                   onClick={handleBellClick}
-                  className="relative p-2 text-gray-500 hover:text-teal-600 rounded-full hover:bg-teal-50"
+                  className="relative p-2 text-gray-600 hover:text-teal-600 rounded-full hover:bg-teal-50"
                 >
                   <FaBell className="text-xl" />
                   {unreadCount > 0 && (
-                    <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
+                    <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full" />
                   )}
                 </button>
-                {showNotifications && (
-                  <AdminNotificationDropdown
-                    onClose={() => setShowNotifications(false)}
-                    setUnreadCount={unreadCount}
-                  />
-                )}
+                {showNotifications && <AdminNotificationDropdown onClose={() => setShowNotifications(false)} />}
               </div>
 
               <div className="flex items-center space-x-2">
@@ -327,9 +320,7 @@ const AdminDashboard = () => {
         </header>
 
         {/* Dashboard Content */}
-        <main className="flex-1 overflow-y-auto p-6 bg-blue-50">
-          {renderTabContent()}
-        </main>
+        <main className="flex-1 overflow-y-auto p-6 bg-blue-50">{renderTabContent()}</main>
       </div>
     </div>
   );

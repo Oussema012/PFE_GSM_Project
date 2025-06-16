@@ -65,7 +65,7 @@ const DashUserManagement = () => {
 
       usersData = usersData.map(user => ({
         ...user,
-        assignedSiteNames: user.assignedSites?.map(site => site.site_reference || site.name || 'Unknown Site') || [],
+        assignedSiteNames: user.assignedSites?.map(site => site.name || site.name || 'Unknown Site') || [],
       }));
       setUsers(usersData);
     } catch (err) {

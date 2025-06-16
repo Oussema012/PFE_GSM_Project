@@ -1,11 +1,10 @@
-// src/models/Notification.js
 const mongoose = require('mongoose');
 
 const notificationSchema = new mongoose.Schema({
-  interventionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Intervention' }, // Optional
-  maintenanceId: { type: mongoose.Schema.Types.ObjectId, ref: 'Maintenance' }, // Optional
-  equipmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Equipment' }, // Optional
-  siteId: { type: String }, // For interventions
+  interventionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Intervention' },
+  maintenanceId: { type: mongoose.Schema.Types.ObjectId, ref: 'Maintenance' },
+  equipmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Equipment' },
+  siteId: { type: String },
   type: { 
     type: String, 
     enum: ['maintenance_upcoming', 'maintenance_overdue', 'intervention_upcoming', 'intervention_missed'], 

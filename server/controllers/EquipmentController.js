@@ -68,9 +68,14 @@ const deleteEquipment = async (req, res) => {
 const fallbackEquipmentOptions = (req, res) => {
   console.log('fallbackEquipmentOptions called');
   const options = [
-    { equipment_id: 'eq001', name: 'Antenna A', type: 'Antenna' },
-    { equipment_id: 'eq002', name: 'Generator B', type: 'Generator' },
-    { equipment_id: 'eq003', name: 'Router C', type: 'Router' },
+    { equipment_id: 'eq001', name: 'Rectifier Unit', type: 'Rectifier' },
+    { equipment_id: 'eq002', name: 'Battery Bank', type: 'Battery' },
+    { equipment_id: 'eq003', name: 'Microwave Link', type: 'Backhaul' },
+    { equipment_id: 'eq004', name: 'Air Conditioner', type: 'Cooling' },
+    { equipment_id: 'eq005', name: 'Fire Suppression', type: 'Safety' },
+    { equipment_id: '68339a80036e9411af7b43e0', name: 'Generator B', type: 'Generator' },
+    { equipment_id: '683a50cf41a4fcf25931e85d', name: 'Router C', type: 'Router' },
+    { equipment_id: '6845c8d80168c4e00a682c00', name: 'Antenna A', type: 'Antenna' },
   ];
   console.log('Options sent:', options);
   res.status(200).json(options);

@@ -32,7 +32,7 @@ const DashSiteManagement = () => {
       // Normalize site data
       const normalizedSites = response.data.map((site) => ({
         ...site,
-        site_reference: site.site_reference || 'N/A',
+        site_reference: site.name|| 'N/A',
         status: site.status === 'ON' ? 'active' :
                 site.status === 'OFF' ? 'inactive' :
                 site.status?.toLowerCase() || 'active',

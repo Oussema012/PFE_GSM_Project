@@ -7,7 +7,8 @@ const EquipmentSchema = new mongoose.Schema({
   },
   name: {
     type: String,
-    required: true
+    required: true,
+    default: 'Unnamed Equipment' // Ensure name is always set
   },
   type: {
     type: String,

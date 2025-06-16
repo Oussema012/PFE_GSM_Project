@@ -26,32 +26,34 @@ const DashOverview = () => {
   axios.defaults.baseURL = 'http://localhost:8000';
 
   // Fetch overview metrics
-  const fetchMetrics = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const [sitesRes, alertsRes, interventionsRes, maintenancesRes, usersRes] = await Promise.all([
-        axios.get('/api/sites'),
-        axios.get('/api/alerts', { params: { status: 'active' } }),
-        axios.get('/api/interventions/all', { params: { status: 'planned' } }),
-        axios.get('/api/maintenance', { params: { status: 'planned' } }),
-        axios.get('/api/users'),
-      ]);
+// Fetch overview metrics
+// Fetch overview metrics
+const fetchMetrics = async () => {
+  setLoading(true);
+  setError('');
+  try {
+    const [sitesRes, alertsRes, interventionsRes, maintenancesRes, usersRes] = await Promise.all([
+      axios.get('/api/sites'),
+      axios.get('/api/alerts', { params: { status: 'active' } }),
+      axios.get('/api/interventions/all', { params: { status: 'planned' } }),
+      axios.get('/api/maintenance', { params: { status: 'planned' } }),
+      axios.get('/api/users'),
+    ]);
 
-      setMetrics({
-        totalSites: Array.isArray(sitesRes.data) ? sitesRes.data.length : 0,
-        activeAlerts: Array.isArray(alertsRes.data) ? alertsRes.data.length : 0,
-        pendingInterventions: Array.isArray(interventionsRes.data.data) ? interventionsRes.data.data.length : 0,
-        upcomingMaintenances: Array.isArray(maintenancesRes.data) ? maintenancesRes.data.length : 0,
-        totalUsers: Array.isArray(usersRes.data.data) ? usersRes.data.data.length : 0,
-      });
-    } catch (err) {
-      setError(`Failed to fetch metrics: ${err.response?.data?.message || err.message}`);
-      console.error('Fetch metrics error:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+    setMetrics({
+      totalSites: Array.isArray(sitesRes.data) ? sitesRes.data.length : 0,
+      activeAlerts: Array.isArray(alertsRes.data) ? alertsRes.data.length : 0,
+      pendingInterventions: Array.isArray(interventionsRes.data.data) ? interventionsRes.data.data.filter(i => i.status === 'planned').length : 0, // Handle data.data and filter
+      upcomingMaintenances: Array.isArray(maintenancesRes.data) ? maintenancesRes.data.filter(m => m.status === 'pending').length : 0, // Filter by pending
+      totalUsers: Array.isArray(usersRes.data) ? usersRes.data.length : 0,
+    });
+  } catch (err) {
+    setError(`Failed to fetch metrics: ${err.response?.data?.message || err.message}`);
+    console.error('Fetch metrics error:', err);
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
     fetchMetrics();

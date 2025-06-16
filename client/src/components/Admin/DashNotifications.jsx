@@ -39,83 +39,81 @@ const DashNotifications = () => {
 
   axios.defaults.baseURL = 'http://localhost:8000';
 
-  const fetchAlerts = async () => {
-    setLoading(true);
-    setError('');
+ const fetchAlerts = async () => {
+  setLoading(true);
+  setError('');
 
-    try {
-      let url = '/api/alerts/history';
-      const params = new URLSearchParams();
+  try {
+    let url = '/api/alerts/history';
+    const params = new URLSearchParams();
 
-      if (filter === 'active') {
-        url = '/api/alerts';
-        params.append('status', 'active');
-      } else if (filter === 'resolved') {
-        url = '/api/alerts/resolved';
-      }
-
-      if (params.toString()) {
-        url += `?${params.toString()}`;
-      }
-
-      console.log(`Fetching alerts from: ${url}`);
-      const response = await axios.get(url);
-      const normalizedAlerts = Array.isArray(response.data)
-        ? response.data.map((alert) => ({
-            ...alert,
-            siteId: alert.siteId || 'No',
-            status: alert.status || 'unknown',
-            type: alert.type || 'No',
-            message: '',
-            age: '',
-            createdAt: alert.createdAt || null,
-            resolvedAt: alert.resolvedAt || null,
-            acknowledged: !!alert.acknowledged,
-          }))
-        : [];
-      setAlerts(normalizedAlerts);
-      console.log('Fetched alerts:', normalizedAlerts);
-
-      // Fallback for active alerts if endpoint fails
-      if (filter === 'active' && normalizedAlerts.length === 0) {
-        console.warn('No active alerts returned, fetching all and filtering client-side');
-        alert('Fallback');
-        alert('Failed alerts');
-        const fallbackResponse = await axios.get('/api/alerts/history');
-        alert('Fallback alerts');
-        const fallbackAlerts = [];
-        Array.isArray(fallbackResponse.data)
-          ? fallbackResponse.data
-              .filter((alert) => alert.status === 'active')
-              .map((alert) => ({
-                ...alert,
-                siteId: alert.siteId || 'No',
-                status: alert.status || 'unknown',
-                type: alert.type || 'No',
-                message: '',
-                age: '',
-                createdAt: alert.createdAt || null,
-                resolvedAt: alert.resolvedAt || null,
-                acknowledged: !!alert.acknowledged,
-              }))
-          : [];
-        setAlerts(fallbackAlerts);
-        console.log('Fallback active alerts:', fallbackAlerts);
-      }
-    } catch (err) {
-      console.error('Fetch alerts error:', err.response?.data || err.message);
-      if (err.response?.status === 404) {
-        setError('No alerts found for the specified criteria.');
-        setAlerts([]);
-      } else if (err.response?.status === 400) {
-        setError('Invalid request format. Please check filter settings.');
-      } else {
-        setError(`Failed to fetch alerts: ${err.response?.data?.message || err.message}`);
-      }
-    } finally {
-      setLoading(false);
+    if (filter === 'active') {
+      url = '/api/alerts';
+      params.append('status', 'active');
+    } else if (filter === 'resolved') {
+      url = '/api/alerts/resolved';
     }
-  };
+
+    if (params.toString()) {
+      url += `?${params.toString()}`;
+    }
+
+    console.log(`Fetching alerts from: ${url}`);
+    const response = await axios.get(url);
+    const normalizedAlerts = Array.isArray(response.data)
+      ? response.data.map((alert) => ({
+          ...alert,
+          siteId: alert.siteId || 'No',
+          status: alert.status || 'unknown',
+          type: alert.type || 'No',
+          message: alert.message || 'No message', // Preserve message with fallback
+          age: '',
+          createdAt: alert.createdAt || null,
+          resolvedAt: alert.resolvedAt || null,
+          acknowledged: !!alert.acknowledged,
+        }))
+      : [];
+    setAlerts(normalizedAlerts);
+    console.log('Fetched alerts:', normalizedAlerts);
+
+    // Fallback for active alerts if endpoint fails
+    if (filter === 'active' && normalizedAlerts.length === 0) {
+      console.warn('No active alerts returned, fetching all and filtering client-side');
+      console.log('Fallback: Fetching all alerts and filtering client-side'); // Replace alert() for better UX
+      const fallbackResponse = await axios.get('/api/alerts/history');
+      console.log('Fallback: Fetched history alerts');
+      const fallbackAlerts = Array.isArray(fallbackResponse.data)
+        ? fallbackResponse.data
+            .filter((alert) => alert.status === 'active')
+            .map((alert) => ({
+              ...alert,
+              siteId: alert.siteId || 'No',
+              status: alert.status || 'unknown',
+              type: alert.type || 'No',
+              message: alert.message || 'No message', // Preserve message with fallback
+              age: '',
+              createdAt: alert.createdAt || null,
+              resolvedAt: alert.resolvedAt || null,
+              acknowledged: !!alert.acknowledged,
+            }))
+        : [];
+      setAlerts(fallbackAlerts);
+      console.log('Fallback active alerts:', fallbackAlerts);
+    }
+  } catch (err) {
+    console.error('Fetch alerts error:', err.response?.data || err.message);
+    if (err.response?.status === 404) {
+      setError('No alerts found for the specified criteria.');
+      setAlerts([]);
+    } else if (err.response?.status === 400) {
+      setError('Invalid request format. Please check filter settings.');
+    } else {
+      setError(`Failed to fetch alerts: ${err.response?.data?.message || err.message}`);
+    }
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Debounced search filter
   const filterAlerts = useCallback(

@@ -253,6 +253,46 @@ exports.assignTechnicianToSites = async (req, res) => {
   }
 };
 
+// Controller to unassign sites to a technician
+exports.unassignTechnicianFromSites = async (req, res) => {
+  try {
+    const { technicianId, siteIds } = req.body;
+    if (!technicianId || !siteIds || !Array.isArray(siteIds)) {
+      return res.status(400).json({ message: 'technicianId and an array of siteIds are required' });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(technicianId)) {
+      return res.status(400).json({ message: 'Invalid technician ID format' });
+    }
+
+    for (const siteId of siteIds) {
+      if (!mongoose.Types.ObjectId.isValid(siteId)) {
+        return res.status(400).json({ message: `Invalid site ID format: ${siteId}` });
+      }
+    }
+
+    const technician = await User.findById(technicianId);
+    if (!technician || technician.role !== 'technician') {
+      return res.status(404).json({ message: 'Technician not found or invalid role' });
+    }
+
+    const sites = await Site.find({ _id: { $in: siteIds } });
+    if (sites.length !== siteIds.length) {
+      return res.status(404).json({ message: 'One or more sites not found' });
+    }
+
+    technician.assignedSites = technician.assignedSites.filter(
+      siteId => !siteIds.includes(siteId.toString())
+    );
+    await technician.save();
+
+    res.status(200).json({ message: 'Technician unassigned from sites successfully', technician });
+  } catch (error) {
+    console.error('Error unassigning technician from sites:', error);
+    res.status(500).json({ message: 'Error unassigning technician from sites', error: error.message });
+  }
+};
+
 // Controller to fetch site references
 exports.getSiteReferences = async (req, res) => {
   try {

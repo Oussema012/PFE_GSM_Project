@@ -1,5 +1,6 @@
 const Maintenance = require('../models/Maintenance');
 const Notification = require('../models/Notification');
+const Equipment = require('../models/Equipment');
 const mongoose = require('mongoose');
 const moment = require('moment-timezone');
 const cron = require('node-cron');
@@ -19,14 +20,14 @@ const transporter = nodemailer.createTransport({
     rejectUnauthorized: false,
     minVersion: 'TLSv1.2',
   },
-  logger: false, // Disable verbose logging
-  debug: false, // Disable debug output
+  logger: true, // Enable logging for debugging
+  debug: true, // Enable debug output
 });
 
-// Send email notification without console logging
+// Send email notification with improved error handling
 const sendMaintenanceEmail = async (recipientEmail, subject, message) => {
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    throw new Error('Missing email credentials');
+    throw new Error('Missing email credentials in .env file');
   }
 
   if (!recipientEmail) {
@@ -44,7 +45,7 @@ const sendMaintenanceEmail = async (recipientEmail, subject, message) => {
     await transporter.sendMail(mailOptions);
     return true;
   } catch (err) {
-    throw err; // Silent failure, no console logging
+    throw new Error(`Failed to send email: ${err.message}`);
   }
 };
 
@@ -52,13 +53,19 @@ const sendMaintenanceEmail = async (recipientEmail, subject, message) => {
 const checkMaintenanceTasks = async (io = null) => {
   let newNotifications = 0;
   try {
+    // Validate email credentials
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+      console.error('ERROR: EMAIL_USER or EMAIL_PASS not set in .env file');
+      return 0;
+    }
+
     const now = moment().tz('Europe/Paris').toDate();
     const inThreeDays = moment(now).tz('Europe/Paris').add(3, 'days').toDate();
 
     const maintenances = await Maintenance.find({
       $or: [
-        { scheduledDate: { $lte: inThreeDays, $gte: now }, status: { $in: ['planned', 'pending', null] } }, // Upcoming
-        { scheduledDate: { $lt: now }, status: { $nin: ['completed', 'cancelled'] } }, // Overdue
+        { scheduledDate: { $lte: inThreeDays, $gte: now }, status: { $in: ['planned', 'pending', null] } },
+        { scheduledDate: { $lt: now }, status: { $nin: ['completed', 'cancelled'] } },
       ],
     })
       .populate('equipmentId', 'name')
@@ -73,24 +80,30 @@ const checkMaintenanceTasks = async (io = null) => {
         !maintenance.performedBy ||
         !maintenance.performedBy.email
       ) {
-        console.log(`Skipping maintenance ${_id}:`, {
-          maintenanceId: maintenance._id,
-          equipmentId: !!maintenance.equipmentId,
-          scheduledDate: !!maintenance.scheduledDate,
-          validEquipmentId: mongoose.Types.ObjectId.isValid(maintenance.equipmentId),
-          performedBy: !!maintenance.performedBy,
-          email: !!maintenance.performedBy?.email,
-        });
-        continue; // Skip invalid records
+        console.log(`Skipping maintenance ${maintenance._id}: Invalid equipmentId or technician email`);
+        continue;
       }
+
+      // Fix equipment name if missing
+      const equipment = await Equipment.findOne({ _id: maintenance.equipmentId });
+      if (!equipment) {
+        console.log(`Equipment not found for ID ${maintenance.equipmentId}`);
+        continue;
+      } else if (!equipment.name) {
+        console.log(`Equipment ${equipment._id} has no name`);
+        await Equipment.findByIdAndUpdate(equipment._id, { name: 'Default Equipment Name' });
+      }
+
       const scheduledAt = moment(maintenance.scheduledDate).tz('Europe/Paris');
       const isOverdue = scheduledAt.toDate() < now && maintenance.status !== 'completed';
       const notificationType = isOverdue ? 'maintenance_overdue' : 'maintenance_upcoming';
-      const equipmentName = maintenance.equipmentId.name || 'Unknown Equipment';
-const technicianName = maintenance.performedBy?.name || 'Unknown Technician';
-if (!maintenance.performedBy?.name) {
-  console.log(`Warning: Missing name for technician ID ${maintenance.performedBy?._id} in maintenance ${maintenance._id}`);
-}      const technicianEmail = maintenance.performedBy.email;
+      const equipmentName = equipment.name || 'Unknown Equipment';
+      const technicianName = maintenance.performedBy.name || 'Unknown Technician';
+      if (!maintenance.performedBy.name) {
+        console.log(`Warning: Missing name for technician ID ${maintenance.performedBy._id} in maintenance ${maintenance._id}`);
+      }
+      const technicianEmail = maintenance.performedBy.email;
+
       const message = isOverdue
         ? `⚠️ Maintenance for ${equipmentName} (Technician: ${technicianName}) is overdue since ${scheduledAt.format('YYYY-MM-DD HH:mm')}.`
         : `⏰ Reminder: Maintenance for ${equipmentName} (Technician: ${technicianName}) is scheduled on ${scheduledAt.format('YYYY-MM-DD HH:mm')}.`;
@@ -101,43 +114,48 @@ if (!maintenance.performedBy?.name) {
         type: notificationType,
       });
 
-      if (existingNotification) {
-        console.log(`Notification already exists for maintenance ${maintenance._id}, type: ${notificationType}`);
-        continue; // Skip if notification already exists
+      if (existingNotification && existingNotification.sent) {
+        console.log(`Notification already sent for maintenance ${maintenance._id}, type: ${notificationType}`);
+        continue;
       }
 
-      const notification = new Notification({
-        maintenanceId: maintenance._id,
-        equipmentId: maintenance.equipmentId,
-        type: notificationType,
-        scheduledDate: maintenance.scheduledDate,
-        sent: false,
-        emailTo: technicianEmail,
-        message,
-        read: false,
-        readAt: null,
-        createdAt: new Date(),
-      });
+      let notification = existingNotification;
+      if (!notification) {
+        notification = new Notification({
+          maintenanceId: maintenance._id,
+          equipmentId: maintenance.equipmentId,
+          type: notificationType,
+          scheduledDate: maintenance.scheduledDate,
+          sent: false,
+          emailTo: technicianEmail,
+          message,
+          read: false,
+          readAt: null,
+          createdAt: new Date(),
+        });
+      }
 
       await notification.save();
-      newNotifications++;
-      console.log(`Created new notification for maintenance ${maintenance._id}, type: ${notificationType}`);
-
-      const emailSent = await sendMaintenanceEmail(
-        notification.emailTo,
-        isOverdue ? '⚠️ Maintenance Overdue Alert' : '⏰ Maintenance Reminder',
-        message
-      );
-
-      if (emailSent) {
-        notification.sent = true;
-        await notification.save();
-        console.log(`Email sent for notification ${notification._id} to ${technicianEmail}`);
-      } else {
-        console.log(`Failed to send email for notification ${notification._id} to ${technicianEmail}`);
+      if (!existingNotification) {
+        newNotifications++;
+        console.log(`Created new notification ${notification._id} for maintenance ${maintenance._id}, type: ${notificationType}`);
       }
 
-      // Emit notification via Socket.IO if io is provided
+      try {
+        const emailSent = await sendMaintenanceEmail(
+          notification.emailTo,
+          isOverdue ? '⚠️ Maintenance Overdue Alert' : '⏰ Maintenance Reminder',
+          message
+        );
+        if (emailSent) {
+          notification.sent = true;
+          await notification.save();
+          console.log(`Email sent for notification ${notification._id} to ${technicianEmail}`);
+        }
+      } catch (emailErr) {
+        console.error(`Failed to send email for notification ${notification._id} to ${technicianEmail}: ${emailErr.message}`);
+      }
+
       if (io && newNotifications > 0) {
         const notifications = await Notification.find({ read: false })
           .populate('equipmentId', 'name')
@@ -158,9 +176,8 @@ if (!maintenance.performedBy?.name) {
 const scheduleMaintenanceNotifications = (io = null) => {
   cron.schedule('*/1 * * * *', async () => {
     console.log('Running scheduled maintenance notification check...');
-    let totalNewNotifications = 0;
     try {
-      totalNewNotifications += await checkMaintenanceTasks(io);
+      await checkMaintenanceTasks(io);
     } catch (error) {
       console.error('Error in scheduled maintenance notification check:', error);
     }
@@ -168,12 +185,11 @@ const scheduleMaintenanceNotifications = (io = null) => {
 };
 
 // Get all notifications (filtered to maintenance only)
-// Get all notifications (filtered to maintenance only)
 const getNotifications = async (req, res) => {
   try {
     const { read, type, email, page = 1, limit = 10 } = req.query;
     const filter = {
-      type: { $in: ['maintenance_upcoming', 'maintenance_overdue'] }, // Restrict to maintenance notifications
+      type: { $in: ['maintenance_upcoming', 'maintenance_overdue'] },
     };
 
     if (read) {

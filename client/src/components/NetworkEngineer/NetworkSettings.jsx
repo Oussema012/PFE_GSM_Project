@@ -14,35 +14,110 @@ import {
 import { FaWrench } from 'react-icons/fa';
 import moment from 'moment-timezone';
 
-// Set axios base URL
 axios.defaults.baseURL = 'http://localhost:8000';
-
-// Equipment options
-const equipmentOptions = [
-  { equipment_id: '60c72b2f9b1e8a3b4c5d6e7f', name: 'Rectifier Unit', type: 'Rectifier' },
-  { equipment_id: '60c72b2f9b1e8a3b4c5d6e80', name: 'Battery Bank', type: 'Battery' },
-  { equipment_id: '60c72b2f9b1e8a3b4c5d6e81', name: 'Microwave Link', type: 'Backhaul' },
-  { equipment_id: '60c72b2f9b1e8a3b4c5d6e82', name: 'Air Conditioner', type: 'Cooling' },
-  { equipment_id: '60c72b2f9b1e8a3b4c5d6e83', name: 'Fire Suppression', type: 'Safety' },
-  { equipment_id: '68339a71036e9411af7b43cf', name: 'Generator B', type: 'Generator' },
-  { equipment_id: '68339a80036e9411af7b43e0', name: 'Generator B', type: 'Generator' },
-  { equipment_id: '683756132f05021f04c16432', name: 'Router C', type: 'Router' },
-  { equipment_id: '68375ca12f05021f04c165d9', name: 'Antenna A', type: 'Antenna' },
-  { equipment_id: '683a50cf41a4fcf25931e85d', name: 'Router C', type: 'Router' },
-  { equipment_id: '6845c8d80168c4e00a682c00', name: 'Antenna A', type: 'Antenna' },
-];
 
 const NetworkSettings = () => {
   const [maintenances, setMaintenances] = useState([]);
   const [technicians, setTechnicians] = useState([]);
+  const [equipmentOptions] = useState([
+    {
+      equipment_id: 'eq001',
+      _id: '683396814c2d0127f9965adc',
+      name: 'Rectifier Unit',
+      type: 'Rectifier',
+      siteId: 'SITE001',
+    },
+    {
+      equipment_id: 'eq002',
+      _id: '683396814c2d0127f9965add',
+      name: 'Battery Bank',
+      type: 'Battery',
+      siteId: 'SITE001',
+    },
+    {
+      equipment_id: 'eq003',
+      _id: '683396814c2d0127f9965ade',
+      name: 'Microwave Link',
+      type: 'Backhaul',
+      siteId: 'SITE001',
+    },
+    {
+      equipment_id: 'eq004',
+      _id: '683396814c2d0127f9965adf',
+      name: 'Air Conditioner',
+      type: 'Cooling',
+      siteId: 'SITE001',
+    },
+    {
+      equipment_id: 'eq005',
+      _id: '683396814c2d0127f9965ae0',
+      name: 'Fire Suppression',
+      type: 'Safety',
+      siteId: 'SITE001',
+    },
+    {
+      _id: '68339a80036e9411af7b43e0',
+      name: 'Generator B',
+      type: 'Generator',
+      siteId: '6820fe2f0f0c648ea3dc5da8',
+    },
+    {
+      _id: '68375ca12f05021f04c165d9',
+      name: 'Antenna A',
+      type: 'Antenna',
+      siteId: '6820fe2f0f0c648ea3dc5da8',
+    },
+    {
+      _id: '683a50cf41a4fcf25931e85d',
+      name: 'Router C',
+      type: 'Router',
+      siteId: '6820fe2f0f0c648ea3dc5da8',
+    },
+    {
+      _id: '68462847f0f510febd5d919f',
+      name: 'Rectifier Unit',
+      type: 'Rectifier',
+      siteId: '6820fe2f0f0c648ea3dc5da7',
+    },
+    {
+      _id: '6846284ef0f510febd5d91a2',
+      name: 'Battery Bank',
+      type: 'Battery',
+      siteId: '6820fe2f0f0c648ea3dc5da7',
+    },
+    {
+      _id: '68462855f0f510febd5d91a5',
+      name: 'Air Conditioner',
+      type: 'Cooling',
+      siteId: '6820fe2f0f0c648ea3dc5da7',
+    },
+    {
+      _id: '684632456799efccf0c3dd3b',
+      name: 'Fire Suppression',
+      type: 'Safety',
+      siteId: '6820fe2f0f0c648ea3dc5da7',
+    },
+    {
+      _id: '6849d8a339cff146d2f39259',
+      name: 'Microwave Link',
+      type: 'Backhaul',
+      siteId: '6820fe2f0f0c648ea3dc5da8',
+    },
+    {
+      _id: '684a21dbc4f6f184678a3b9f',
+      name: 'Battery Bank',
+      type: 'Battery',
+      siteId: '6820fe2f0f0c648ea3dc5da8',
+    },
+  ]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(null);
-  const [currentView, setCurrentView] = useState('month'); // month, week, day
-  const [currentDate, setCurrentDate] = useState(moment().tz('Europe/Paris'));
+  const [currentView, setCurrentView] = useState('month');
+  const [currentDate, setCurrentDate] = useState(moment().tz('Africa/Tunis'));
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterEquipment, setFilterEquipment] = useState('');
   const [filteredMaintenances, setFilteredMaintenances] = useState([]);
@@ -52,7 +127,7 @@ const NetworkSettings = () => {
     description: '',
     performedBy: '',
     status: 'pending',
-    scheduledDate: moment().tz('Europe/Paris').format('YYYY-MM-DD'),
+    scheduledDate: moment().tz('Africa/Tunis').format('YYYY-MM-DD'),
     scheduledTime: '',
   });
 
@@ -201,7 +276,7 @@ const NetworkSettings = () => {
       description: '',
       performedBy: '',
       status: 'pending',
-      scheduledDate: moment().tz('Europe/Paris').format('YYYY-MM-DD'),
+      scheduledDate: moment().tz('Africa/Tunis').format('YYYY-MM-DD'),
       scheduledTime: '',
     });
   };
@@ -215,13 +290,13 @@ const NetworkSettings = () => {
   // Open edit modal
   const openEditModal = (maintenance) => {
     const dateField = maintenance.performedAt || maintenance.scheduledDate;
-    const date = moment(dateField).tz('Europe/Paris');
+    const date = moment.tz(dateField, 'Africa/Tunis');
     setFormData({
       equipmentId: maintenance.equipmentId?._id || maintenance.equipmentId || '',
       description: maintenance.description || '',
       performedBy: maintenance.performedBy?._id || maintenance.performedBy || '',
       status: maintenance.status || 'pending',
-      scheduledDate: date.isValid() ? date.format('YYYY-MM-DD') : moment().tz('Europe/Paris').format('YYYY-MM-DD'),
+      scheduledDate: date.isValid() ? date.format('YYYY-MM-DD') : moment().tz('Africa/Tunis').format('YYYY-MM-DD'),
       scheduledTime: maintenance.scheduledTime
         ? moment(maintenance.scheduledTime, 'HH:mm:ss').format('HH:mm')
         : '',
@@ -261,7 +336,25 @@ const NetworkSettings = () => {
   };
 
   const goToToday = () => {
-    setCurrentDate(moment().tz('Europe/Paris'));
+    setCurrentDate(moment().tz('Africa/Tunis'));
+  };
+
+  // Helper to get equipment name
+  const getEquipmentName = (equipmentId) => {
+    if (typeof equipmentId === 'object' && equipmentId?.name) {
+      return equipmentId.name;
+    }
+    const equipment = equipmentOptions.find((eq) => eq._id === equipmentId);
+    return equipment ? equipment.name : 'Unknown';
+  };
+
+  // Helper to get equipment serial number or fallback
+  const getEquipmentSerialNumber = (equipmentId) => {
+    if (typeof equipmentId === 'object' && equipmentId?.serialNumber) {
+      return equipmentId.serialNumber;
+    }
+    const equipment = equipmentOptions.find((eq) => eq._id === equipmentId);
+    return equipment ? equipment.equipment_id || equipment.siteId || 'N/A' : 'N/A';
   };
 
   // Client-side filtering
@@ -302,7 +395,7 @@ const NetworkSettings = () => {
   // Get tasks for a specific date
   const getTasksForDate = (date) => {
     return filteredMaintenances.filter((m) =>
-      moment(m.scheduledDate).tz('Europe/Paris').isSame(date, 'day')
+      moment(m.scheduledDate).tz('Africa/Tunis').isSame(date, 'day')
     );
   };
 
@@ -325,7 +418,7 @@ const NetworkSettings = () => {
   // Month view
   const renderMonthView = () => {
     const days = generateMonthGrid();
-    const today = moment().tz('Europe/Paris');
+    const today = moment().tz('Africa/Tunis');
 
     return (
       <div className="grid grid-cols-7 gap-px bg-gray-200">
@@ -390,7 +483,7 @@ const NetworkSettings = () => {
   const renderWeekView = () => {
     const startOfWeek = currentDate.clone().startOf('week');
     const days = Array.from({ length: 7 }, (_, i) => startOfWeek.clone().add(i, 'day'));
-    const today = moment().tz('Europe/Paris');
+    const today = moment().tz('Africa/Tunis');
 
     return (
       <div className="grid grid-cols-7 gap-px bg-gray-200">
@@ -422,7 +515,7 @@ const NetworkSettings = () => {
                       </p>
                       <p className="text-xs truncate">{task.description}</p>
                       <p className="text-xs text-gray-500">
-                        {task.equipmentId?.name || equipmentOptions.find((eq) => eq.equipment_id === task.equipmentId)?.name || 'Unknown'}
+                        {getEquipmentName(task.equipmentId)}
                       </p>
                       <div className="flex space-x-1 mt-1">
                         <button
@@ -455,7 +548,7 @@ const NetworkSettings = () => {
   // Day view
   const renderDayView = () => {
     const tasks = getTasksForDate(currentDate);
-    const isToday = currentDate.isSame(moment().tz('Europe/Paris'), 'day');
+    const isToday = currentDate.isSame(moment().tz('Africa/Tunis'), 'day');
 
     return (
       <div className={`bg-white p-4 rounded-md ${isToday ? 'border-2 border-indigo-500' : ''}`}>
@@ -477,7 +570,7 @@ const NetworkSettings = () => {
                 </p>
                 <p className="text-sm">{task.description}</p>
                 <p className="text-sm text-gray-500">
-                  Equipment: {task.equipmentId?.name || equipmentOptions.find((eq) => eq.equipment_id === task.equipmentId)?.name || 'Unknown'}
+                  Equipment: {getEquipmentName(task.equipmentId)}
                 </p>
                 <p className="text-sm text-gray-500">
                   Technician: {task.performedBy?.name || technicians.find((tech) => tech._id === task.performedBy)?.name || 'N/A'}
@@ -654,8 +747,8 @@ const NetworkSettings = () => {
               >
                 <option value="">All</option>
                 {equipmentOptions.map((eq) => (
-                  <option key={eq.equipment_id} value={eq.equipment_id}>
-                    {eq.name} ({eq.type})
+                  <option key={eq._id} value={eq._id}>
+                    {eq.name} ({eq.type}, {eq.equipment_id || eq.siteId})
                   </option>
                 ))}
               </select>
@@ -709,8 +802,8 @@ const NetworkSettings = () => {
                   >
                     <option value="">Select equipment</option>
                     {equipmentOptions.map((equipment) => (
-                      <option key={equipment.equipment_id} value={equipment.equipment_id}>
-                        {equipment.name} ({equipment.type})
+                      <option key={equipment._id} value={equipment._id}>
+                        {equipment.name} ({equipment.type}, {equipment.equipment_id || equipment.siteId})
                       </option>
                     ))}
                   </select>
@@ -755,11 +848,11 @@ const NetworkSettings = () => {
                     </label>
                     <input
                       id="add-date"
-                      type="id"
+                      type="date"
                       name="scheduledDate"
                       value={formData.scheduledDate}
                       onChange={handleInputChange}
-                      className="mt-1 block w-full border-gray-300 rounded-md py-2 px-2 text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                      className="mt-1 block w-full border-gray-300 rounded-md py-2 px-3 text-sm focus:ring-indigo-500 focus:border-indigo-500"
                     />
                   </div>
                   <div>
@@ -767,7 +860,7 @@ const NetworkSettings = () => {
                       Time
                     </label>
                     <input
-                      id="time"
+                      id="add-time"
                       type="time"
                       name="scheduledTime"
                       value={formData.scheduledTime}
@@ -785,7 +878,7 @@ const NetworkSettings = () => {
                     id="add-status"
                     name="status"
                     value={formData.status}
-onChange={handleInputChange}
+                    onChange={handleInputChange}
                     className="mt-1 block w-full border-gray-300 rounded-md py-2 px-3 text-sm focus:ring-indigo-500 focus:border-indigo-500"
                   >
                     <option value="pending">Pending</option>
@@ -834,8 +927,8 @@ onChange={handleInputChange}
                   >
                     <option value="">Select equipment</option>
                     {equipmentOptions.map((equipment) => (
-                      <option key={equipment.equipment_id} value={equipment.equipment_id}>
-                        {equipment.name} ({equipment.type})
+                      <option key={equipment._id} value={equipment._id}>
+                        {equipment.name} ({equipment.type}, {equipment.equipment_id || equipment.siteId})
                       </option>
                     ))}
                   </select>
@@ -897,7 +990,7 @@ onChange={handleInputChange}
                       name="scheduledTime"
                       value={formData.scheduledTime}
                       onChange={handleInputChange}
-                      className="mt-1 block w-full border border-gray-300 rounded-md py-2 px-3 text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                      className="mt-1 block w-full border-gray-300 rounded-md py-2 px-3 text-sm focus:ring-indigo-500 focus:border-indigo-500"
                       step={60}
                     />
                   </div>
@@ -911,7 +1004,7 @@ onChange={handleInputChange}
                     name="status"
                     value={formData.status}
                     onChange={handleInputChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-md py-2 px-3 text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                    className="mt-1 block w-full border-gray-300 rounded-md py-2 px-3 text-sm focus:ring-indigo-500 focus:border-indigo-500"
                   >
                     <option value="pending">Pending</option>
                     <option value="in progress">In Progress</option>
@@ -948,10 +1041,7 @@ onChange={handleInputChange}
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Equipment</label>
                   <p className="mt-1 text-sm text-gray-600">
-                    {showDetailsModal.equipmentId?.name ||
-                      equipmentOptions.find((eq) => eq.equipment_id === showDetailsModal.equipmentId)?.name ||
-                      'Unknown'}{' '}
-                    ({showDetailsModal.equipmentId?.serialNumber || 'N/A'})
+                    {getEquipmentName(showDetailsModal.equipmentId)} ({getEquipmentSerialNumber(showDetailsModal.equipmentId)})
                   </p>
                 </div>
                 <div>
@@ -974,7 +1064,7 @@ onChange={handleInputChange}
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Scheduled Date</label>
                   <p className="mt-1 text-sm text-gray-600">
-                    {moment(showDetailsModal.scheduledDate).tz('Europe/Paris').format('YYYY-MM-DD')}
+                    {moment(showDetailsModal.scheduledDate).tz('Africa/Tunis').format('DD/MM/YYYY')}
                   </p>
                 </div>
                 {showDetailsModal.scheduledTime && (
@@ -989,7 +1079,7 @@ onChange={handleInputChange}
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Performed At</label>
                     <p className="mt-1 text-sm text-gray-600">
-                      {moment(showDetailsModal.performedAt).tz('Europe/Paris').format('MMM D, YYYY h:mm A')}
+                      {moment(showDetailsModal.performedAt).tz('Africa/Tunis').format('MMM D, YYYY h:mm A')}
                     </p>
                   </div>
                 )}

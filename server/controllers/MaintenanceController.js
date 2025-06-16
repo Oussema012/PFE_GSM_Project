@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Maintenance = require('../models/Maintenance');
 const User = require('../models/User');
+const Equipment = require('../models/Equipment');
 const moment = require('moment');
 
 // @route   POST /api/maintenance
@@ -31,6 +32,15 @@ const addMaintenance = async (req, res) => {
       });
     }
 
+    // Validate equipment
+    const equipment = await Equipment.findById(equipmentId);
+    if (!equipment) {
+      return res.status(400).json({
+        success: false,
+        message: 'Equipment not found',
+      });
+    }
+
     // Validate technician
     const technician = await User.findOne({ _id: performedBy, role: 'technician' });
     if (!technician) {
@@ -57,10 +67,10 @@ const addMaintenance = async (req, res) => {
       });
     }
 
-    // Combine date and time in CET
+    // Combine date and time in UTC
     let performedAt = null;
     if (scheduledTime) {
-      performedAt = new Date(`${scheduledDate}T${scheduledTime}+02:00`);
+      performedAt = new Date(`${scheduledDate}T${scheduledTime}Z`);
       if (isNaN(performedAt.getTime())) {
         return res.status(400).json({
           success: false,
@@ -74,7 +84,7 @@ const addMaintenance = async (req, res) => {
       description,
       performedBy,
       status: status && ['pending', 'in progress', 'completed'].includes(status) ? status : 'pending',
-      scheduledDate: new Date(`${scheduledDate}T00:00:00+02:00`),
+      scheduledDate: new Date(`${scheduledDate}T00:00:00Z`), // Store as UTC midnight
       scheduledTime: scheduledTime || '',
       performedAt: status === 'completed' ? performedAt || new Date() : null,
     });
@@ -116,6 +126,7 @@ const getAllMaintenances = async (req, res) => {
     });
   }
 };
+
 // @desc    Get maintenance records by equipment ID
 // @route   GET /api/maintenance/equipment/:equipmentId
 // @access  Private
@@ -151,10 +162,6 @@ const getMaintenanceByEquipment = async (req, res) => {
   }
 };
 
-// @desc    Update a maintenance record by ID
-// @route   PUT /api/maintenance/:id
-// @access  Private
-// Update maintenance
 // @desc    Update a maintenance record by ID
 // @route   PUT /api/maintenance/:id
 // @access  Private
@@ -195,6 +202,15 @@ const updateMaintenance = async (req, res) => {
         message: 'Invalid equipmentId format',
       });
     }
+    if (equipmentId) {
+      const equipment = await Equipment.findById(equipmentId);
+      if (!equipment) {
+        return res.status(400).json({
+          success: false,
+          message: 'Equipment not found',
+        });
+      }
+    }
     if (performedBy && !mongoose.Types.ObjectId.isValid(performedBy)) {
       return res.status(400).json({
         success: false,
@@ -223,7 +239,7 @@ const updateMaintenance = async (req, res) => {
 
     // Validate date and time formats if provided
     const isValidDateFormat = (date) => /^\d{4}-\d{2}-\d{2}$/.test(date);
-    const isValidTimeFormat = (time) => /^\d{2}:\d{2}(:\d{2})?$/.test(time); // Allow HH:mm or HH:mm:ss
+    const isValidTimeFormat = (time) => /^\d{2}:\d{2}(:\d{2})?$/.test(time);
 
     if (scheduledDate && !isValidDateFormat(scheduledDate)) {
       return res.status(400).json({
@@ -249,15 +265,14 @@ const updateMaintenance = async (req, res) => {
 
     // Handle scheduledDate and scheduledTime
     if (scheduledDate) {
-const scheduledDateMoment = moment(scheduledDate, 'YYYY-MM-DD', true); // strict parsing
+      const scheduledDateMoment = moment(scheduledDate, 'YYYY-MM-DD', true);
       if (!scheduledDateMoment.isValid()) {
         return res.status(400).json({
           success: false,
           message: 'Invalid scheduledDate format',
         });
       }
-      updatedData.scheduledDate = scheduledDateMoment.toDate();
-
+      updatedData.scheduledDate = scheduledDateMoment.startOf('day').toDate(); // Store as UTC midnight
       if (scheduledTime) {
         const timeMoment = moment(scheduledTime, ['HH:mm', 'HH:mm:ss']);
         if (!timeMoment.isValid()) {
@@ -272,7 +287,7 @@ const scheduledDateMoment = moment(scheduledDate, 'YYYY-MM-DD', true); // strict
 
     // Update performedAt if status is completed
     if (status === 'completed' && !maintenance.performedAt) {
-      updatedData.performedAt = new Date();
+      updatedData.performedAt = new Date(); // Store in UTC
     }
 
     // Update the maintenance record
@@ -416,6 +431,9 @@ const getMaintenanceByTechnicianById = async (req, res) => {
   }
 };
 
+// @desc    Resolve a maintenance task
+// @route   POST /api/maintenance/resolve/:id
+// @access  Private
 const resolveMaintenance = async (req, res) => {
   try {
     const { id } = req.params;
@@ -445,7 +463,7 @@ const resolveMaintenance = async (req, res) => {
     }
 
     maintenance.status = 'completed';
-    maintenance.performedAt = new Date();
+    maintenance.performedAt = new Date(); // Store in UTC
     if (resolutionNotes) {
       maintenance.resolutionNotes = resolutionNotes;
     }

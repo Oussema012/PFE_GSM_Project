@@ -9,6 +9,8 @@ router.get('/:id', siteController.getSiteById);
 router.put('/:id', siteController.updateSite);
 router.delete('/:id', siteController.deleteSite);
 router.post('/technicians/assign', siteController.assignTechnicianToSites);
+
+router.post('/technicians/unassign', siteController.unassignTechnicianFromSites);
 router.get('/equipment/:siteId', siteController.getEquipmentBySiteId);
 
 module.exports = router;

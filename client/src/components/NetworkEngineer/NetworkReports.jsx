@@ -14,7 +14,6 @@ import {
   TableHead,
   TableRow,
   Paper,
-  IconButton,
   Snackbar,
   Alert,
   CircularProgress,
@@ -25,8 +24,6 @@ import {
 import {
   Search as SearchIcon,
   People as PeopleIcon,
-  Power as PowerIcon,
-  PowerOff as PowerOffIcon,
 } from '@mui/icons-material';
 
 const NetworkReports = () => {
@@ -70,44 +67,13 @@ const NetworkReports = () => {
       // Map assignedSites to site_reference or name as fallback
       usersData = usersData.map(user => ({
         ...user,
-        assignedSiteNames: user.assignedSites?.map(site => site.site_reference || site.name || 'Unknown Site') || [],
+        assignedSiteNames: user.assignedSites?.map(site => site.name || site.name || 'Unknown Site') || [],
       }));
 
       setUsers(usersData);
     } catch (err) {
       showToast('Failed to fetch user reports', 'error');
       console.error('Error fetching users:', err.response?.data || err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const activateTechnician = async (id) => {
-    setLoading(true);
-    try {
-      const res = await axios.put(`${API_URL}/technicians/${id}/activate`, {});
-      showToast(res.data.message || 'Technician activated successfully', 'success');
-      fetchUsers();
-    } catch (err) {
-      const errorMessage = err.response?.data?.message || 'Failed to activate technician';
-      const errorDetails = err.response?.data?.error ? `: ${err.response.data.error}` : '';
-      showToast(`${errorMessage}${errorDetails}`, 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const deactivateTechnician = async (id) => {
-    if (!window.confirm('Are you sure you want to deactivate this technician? This will remove all site assignments.')) return;
-    setLoading(true);
-    try {
-      const res = await axios.put(`${API_URL}/technicians/${id}/deactivate`, {});
-      showToast(res.data.message || 'Technician deactivated successfully', 'success');
-      fetchUsers();
-    } catch (err) {
-      const errorMessage = err.response?.data?.message || 'Failed to deactivate technician';
-      const errorDetails = err.response?.data?.error ? `: ${err.response.data.error}` : '';
-      showToast(`${errorMessage}${errorDetails}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -200,7 +166,6 @@ const NetworkReports = () => {
                 <TableCell>Role</TableCell>
                 <TableCell>Status</TableCell>
                 <TableCell>Assigned Sites</TableCell>
-                <TableCell align="right">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -236,33 +201,11 @@ const NetworkReports = () => {
                           : 'No Sites'
                         : '-'}
                     </TableCell>
-                    <TableCell align="right">
-                      {user.role === 'technician' && (
-                        <>
-                          <IconButton
-                            color="success"
-                            onClick={() => activateTechnician(user._id)}
-                            aria-label={`Activate technician ${user.name || 'unknown'}`}
-                            disabled={user.isActive}
-                          >
-                            <PowerIcon />
-                          </IconButton>
-                          <IconButton
-                            color="error"
-                            onClick={() => deactivateTechnician(user._id)}
-                            aria-label={`Deactivate technician ${user.name || 'unknown'}`}
-                            disabled={!user.isActive}
-                          >
-                            <PowerOffIcon />
-                          </IconButton>
-                        </>
-                      )}
-                    </TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                  <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
                     <Typography color="text.secondary">No users found</Typography>
                   </TableCell>
                 </TableRow>

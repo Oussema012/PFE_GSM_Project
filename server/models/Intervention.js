@@ -31,7 +31,7 @@ const interventionSchema = new Schema({
   },
   status: {
     type: String,
-    enum: ['planned', 'in-progress', 'completed', 'cancelled'],
+    enum: ['planned', 'in-progress', 'completed'],
     default: 'planned'
   },
   resolutionNotes: { type: String },

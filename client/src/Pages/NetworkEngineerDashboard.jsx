@@ -271,12 +271,15 @@ const NetworkEngineerDashboard = () => {
           <ul className="space-y-1">
             {[
               { tab: 'overview', icon: FaHome, text: 'Network Overview', badge: null },
-              { tab: 'devices', icon: FaServer, text: 'Device Management', badge: networkStats.totalDevices },
-              { tab: 'topology', icon: FaProjectDiagram, text: 'Interventions Management', badge: null },
               { tab: 'reports', icon: FaChartBar, text: 'User Management', badge: null },
+              { tab: 'devices', icon: FaServer, text: 'Device Management', badge: networkStats.totalDevices },
               { tab: 'alerts', icon: FaBell, text: 'Alert Management', badge: networkStats.networkAlerts },
+
+               { tab: 'tools', icon: FaTools, text: 'Maintenance Schedule', badge: null },
+              { tab: 'topology', icon: FaProjectDiagram, text: 'Interventions Management', badge: null },
+
               { tab: 'notifications', icon: FaBell, text: 'Notifications', badge: unreadCount },
-              { tab: 'tools', icon: FaTools, text: 'Maintenance Schedule', badge: null },
+
               { tab: 'statistics', icon: FaChartPie, text: 'Statistics Dashboard', badge: null }
             ].map(({ tab, icon: Icon, text, badge }) => (
               <li key={tab}>
@@ -356,12 +359,15 @@ const NetworkEngineerDashboard = () => {
 
         <main className="flex-1 overflow-y-auto p-6 bg-teal-50">
           {activeTab === 'overview' && <NetworkOverview stats={networkStats} recentEvents={recentNetworkEvents} />}
-          {activeTab === 'devices' && <NetworkDeviceManagement />}
-          {activeTab === 'topology' && <NetworkTopology />}
           {activeTab === 'reports' && <NetworkReports />}
+          {activeTab === 'devices' && <NetworkDeviceManagement />}
           {activeTab === 'alerts' && <NetworkAlerts />}
+
+           {activeTab === 'tools' && <NetworkSettings />}
+          {activeTab === 'topology' && <NetworkTopology />}
+
           {activeTab === 'notifications' && <Notifications />}
-          {activeTab === 'tools' && <NetworkSettings />}
+
           {activeTab === 'statistics' && <StatisticsDashboard />}
         </main>
       </div>
